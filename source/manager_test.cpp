@@ -78,6 +78,17 @@ namespace {
         }}.detach();
         return fut.wait_for(timeout) == std::future_status::ready;
     }
+
+    template <class Pred> bool wait_until(std::chrono::milliseconds timeout, Pred pred) {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (!pred()) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                return false;
+            }
+            std::this_thread::yield();
+        }
+        return true;
+    }
 } // namespace
 
 // ───────────── connect ─────────────
@@ -291,30 +302,50 @@ TEST_F(ManagerTest, DestructorWaitsForBorrowedClient) {
     EXPECT_EQ(destroyer.wait_for(2s), std::future_status::ready);
 }
 
-// 반납과 소멸이 경쟁할 때 대기 중인 get_client 가 nullptr 를 받고,
-// 소멸자도 멈추지 않고 끝나야 한다. 타이밍 문제라 여러 번 반복한다.
+// 대기 스레드가 있는 상태에서 소멸과 반납이 경쟁해도
+// 1) 소멸자가 멈추지 않고 2) 모든 waiter 가 빠져나오고 3) 해제된 manager 를 건드리지
+// 않아야 한다
 TEST_F(ManagerTest, DestructorWakesWaitersWithoutHang) {
     constexpr int rounds = 200;
-    constexpr int waiters = 4;
+    constexpr std::size_t waiters = 4;
 
     for (int r = 0; r < rounds; ++r) {
         auto* mgr = new sql::manager{path(), 1};
         ASSERT_TRUE(mgr->connect());
+
         auto holder = std::make_shared<std::unique_ptr<sql::client>>(mgr->get_client());
         ASSERT_NE(*holder, nullptr);
 
-        const bool ok = finishes_within(3s, [mgr, holder] {
+        auto entered = std::make_shared<std::atomic<bool>>(false);
+        auto got_client = std::make_shared<std::atomic<int>>(0);
+        auto got_null = std::make_shared<std::atomic<int>>(0);
+
+        // 라운드마다 반납 시점을 바꿔서 "소멸 먼저 / 반납 먼저" 둘 다 나오게 한다
+        const auto jitter = std::chrono::microseconds{(r * 37) % 300};
+
+        const bool ok = finishes_within(3s, [=] {
             std::vector<std::thread> ws;
-            for (int i = 0; i < waiters; ++i) {
-                ws.emplace_back([mgr] {
-                    // 반납이 소멸보다 먼저 일어나면 client 를 받을 수도 있음 → 바로 반납
-                    auto c = mgr->get_client();
+            for (std::size_t i = 0; i < waiters; ++i) {
+                ws.emplace_back([=] {
+                    auto c = mgr->get_client(); // 받았으면 스코프 끝에서 바로 반납
+                    ++(c ? *got_client : *got_null);
                 });
             }
-            std::this_thread::sleep_for(5ms); // waiter 들이 wait 에 들어가게
+
+            // 모든 waiter 가 cv wait 안에 들어간 걸 확인한 뒤에만 delete 한다
+            *entered = wait_until(
+                2s, [&] { return sql::manager_test_access::waiting(*mgr) == waiters; });
+            if (!*entered) {
+                for (auto& w : ws) {
+                    w.detach(); // 실패 처리: mgr 는 일부러 누수
+                }
+                return;
+            }
 
             std::thread destroyer{[mgr] { delete mgr; }};
-            std::this_thread::sleep_for(1ms);
+            if (jitter.count() > 0) {
+                std::this_thread::sleep_for(jitter);
+            }
             holder->reset(); // 소멸 중 반납 → 경쟁 상황
 
             for (auto& w : ws) {
@@ -324,5 +355,8 @@ TEST_F(ManagerTest, DestructorWakesWaitersWithoutHang) {
         });
 
         ASSERT_TRUE(ok) << "round " << r << ": 소멸자 또는 대기 스레드가 멈춤";
+        ASSERT_TRUE(entered->load()) << "round " << r << ": waiter 가 wait 에 못 들어감";
+        EXPECT_EQ(got_client->load() + got_null->load(), static_cast<int>(waiters))
+            << "round " << r;
     }
 }

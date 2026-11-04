@@ -8,7 +8,6 @@
 #include <string_view>
 #include <ctls/ctls.hpp>
 #include <sqlite3.h>
-#include "cursor.hpp"
 
 namespace sql {
     template <typename... ARGS>

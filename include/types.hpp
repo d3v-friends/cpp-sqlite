@@ -34,7 +34,7 @@ namespace sql {
         terminated,  // 종료됨
     };
 
-    inline std::string to_string(const e_manager_status status) {
+    [[nodiscard]] inline std::string to_string(const e_manager_status status) {
         using enum e_manager_status;
         switch (status) {
         case init:
@@ -66,7 +66,7 @@ namespace sql {
         case e_db_status::init:
             return "초기화";
         case e_db_status::ready:
-            return "연결중";
+            return "대기중";
         case e_db_status::in_progress:
             return "사용중";
         case e_db_status::terminated:

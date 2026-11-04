@@ -34,8 +34,8 @@ namespace sql {
         _dbs.reserve(_max_connections);
         for (std::size_t i = 0; i < _max_connections; ++i) {
             sqlite3* raw = nullptr;
-            if (sqlite3_open_v2(_db_path.c_str(), &raw, flags, nullptr) != SQLITE_OK)
-                [[unlikely]] {
+            if (sqlite3_open_v2(_db_path.string().c_str(), &raw, flags, nullptr) !=
+                SQLITE_OK) [[unlikely]] {
                 // 모든 객체 삭제
                 ILOG_ERROR(
                     "failed to open database: path={}, error={}", _db_path.string(),

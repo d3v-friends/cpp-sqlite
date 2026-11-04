@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <vector>
 #include <mutex>
+#include <ctls/ctls.hpp>
 
 #include "db.hpp"
 #include "types.hpp"
@@ -18,7 +19,9 @@ namespace sql {
             const std::string& db_path,
             const std::size_t max_connections = 10)
             : _db_path{db_path}, _max_connections{max_connections},
-              _idle_db{max_connections} {}
+              _idle_db{max_connections} {
+            IASSERT(0 < _max_connections, "max_connections must be greater than 0");
+        }
         ~manager();
         manager(const manager&) = delete;
         manager& operator=(const manager&) = delete;
@@ -42,5 +45,14 @@ namespace sql {
     private:
         friend db;
         void release();
+
+        friend struct manager_test_access; // 테스트에서 내부 상태 확인용
+    };
+
+    struct manager_test_access {
+        static std::size_t waiting(manager& m) {
+            std::scoped_lock lock{m._mutex};
+            return m._wait_db;
+        }
     };
 } // namespace sql

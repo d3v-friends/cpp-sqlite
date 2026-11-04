@@ -3,14 +3,12 @@
 #include <mutex>
 #include <string>
 #include <memory>
-#include <optional>
 
 #include "types.hpp"
 
 namespace sql {
     class manager;
     class client;
-    template <class T> class cursor;
 
     class db {
     public:
