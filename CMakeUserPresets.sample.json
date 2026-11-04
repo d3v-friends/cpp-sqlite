@@ -1,0 +1,43 @@
+{
+  "version": 10,
+  "$schema": "https://raw.githubusercontent.com/Kitware/CMake/master/Help/manual/presets/schema.json",
+  "configurePresets": [
+    {
+      "name": "mac-debug",
+      "inherits": "debug",
+      "environment": {
+        "VCPKG_ROOT": "[위치]/sdk/cpp/vcpkg"
+      }
+    },
+    {
+      "name": "mac-release",
+      "inherits": "release",
+      "environment": {
+        "VCPKG_ROOT": "[위치]/sdk/cpp/vcpkg"
+      }
+    },
+    {
+      "name": "window-debug",
+      "inherits": "debug",
+      "environment": {
+        "VCPKG_ROOT": "[위치]/vcpkg",
+        "VSLANG": "1033"
+
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+      }
+    },
+    {
+      "name": "window-release",
+      "inherits": "release",
+      "environment": {
+        "VCPKG_ROOT": "[위치]/vcpkg",
+        "VSLANG": "1033"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+      }
+    }
+  ]
+}

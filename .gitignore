@@ -1,0 +1,34 @@
+# ide
+.idea
+.junie
+.vs
+.vscode
+.fleet
+.claude
+
+# env
+.env
+
+# mac
+.DS_Store
+
+# cmake
+CMakeUserPresets.json
+/build/
+
+# vcpkg
+vcpkg_installed
+
+# trash
+/dev
+
+# agent
+agent.md
+IDEA.md
+
+# release
+/release/
+
+# etc
+/docs/
+

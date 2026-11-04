@@ -1,0 +1,47 @@
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  -readability-uppercase-literal-suffix,
+  misc-*,
+  misc-include-cleaner,
+  misc-header-include-cycle,
+  cppcoreguidelines-*,
+  readability-duplicate-include,
+  -modernize-use-trailing-return-type,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -misc-non-private-member-variables-in-classes,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-macro-usage,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-init-variables,
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+
+Diagnostics:
+  MissingIncludes: Strict
+  UnusedIncludes: Strict
+
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key: readability-identifier-naming.MemberPrefix
+    value: '_'
+  - key: readability-identifier-naming.PrivateMemberCase
+    value: snake_case
+  - key: readability-identifier-naming.FunctionCase
+    value: snake_case
+  - key: readability-identifier-naming.VariableCase
+    value: snake_case
+  - key: misc-include-cleaner.IgnoreHeaders
+    value: ''
+  - key: cppcoreguidelines-avoid-do-while.IgnoreMacros
+    value: true

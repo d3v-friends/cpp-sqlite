@@ -1,0 +1,47 @@
+# .clang-format
+BasedOnStyle: LLVM
+
+# 들여쓰기
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4          # public:/private: 들여쓰기 보정
+
+# 줄 길이
+ColumnLimit: 90
+
+# .clang-format: 문자열은 절대 안 쪼갬 (90자를 넘어도 그대로 둠)
+BreakStringLiterals: false
+
+# 중괄호 스타일
+BreakBeforeBraces: Attach          # 여는 중괄호를 같은 줄에 (K&R 스타일)
+
+# 포인터/레퍼런스 정렬
+PointerAlignment: Left             # int* p  (오른쪽 정렬 원하면 Right)
+ReferenceAlignment: Left
+
+# 공백
+SpaceBeforeParens: ControlStatements   # if (x) 처럼 제어문에만 공백
+SpacesInAngles: false                  # std::vector<int> (공백 없음)
+
+# 정렬
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# 네임스페이스
+NamespaceIndentation: All         # namespace 안 코드는 들여쓰기 안 함 (지금 Engine 네임스페이스 스타일과 일치)
+
+# include 정렬
+SortIncludes: false # 헤더자동정렬은 라이브러리마다 요구사항이 있어서 불가능하다. 직접해야한다
+
+# 파라미터
+BinPackParameters: false  #파라미터를 여러줄 가능하게 다
+AllowAllParametersOfDeclarationOnNextLine: false
+AlignAfterOpenBracket: AlwaysBreak
+
+# 브레이스
+InsertBraces: true # if문등 {} 기본으로 입력해주기
+
+# 기타
+Standard: c++20
