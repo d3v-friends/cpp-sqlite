@@ -2,12 +2,15 @@
 #include <utility>
 #include <mutex>
 #include <string>
+#include <memory>
+#include <optional>
 
 #include "types.hpp"
 
 namespace sql {
     class manager;
     class client;
+    template <class T> class cursor;
 
     class db {
     public:
@@ -22,6 +25,11 @@ namespace sql {
         // 쿼리를 실행한다
         [[nodiscard]] bool exec(const std::string& sql) const;
 
+        // 실패시 nullptr 반환, 콜함수에서 nullptr 체크 해준다
+        template <typename... ARGS>
+        [[nodiscard]] sqlite3_stmt_ptr
+        query(const std::string& sql, ARGS&&... args);
+
     private:
         mutable std::mutex _mutex;
         sqlite3_ptr _db = nullptr;
@@ -31,6 +39,8 @@ namespace sql {
         e_db_pool_status _pool_status = e_db_pool_status::idle;
 
         bool exec_unlock(const std::string& sql) const;
+
+        template <class T> int bind_stmt(sqlite3_stmt* stmt, int i, T& value);
 
     private:
         friend manager;
@@ -47,3 +57,5 @@ namespace sql {
         void release();
     };
 } // namespace sql
+
+#include "db.inl"

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "types.hpp"
-#include "manager.hpp"
-#include "db.hpp"
 #include "client.hpp"
+#include "cursor.hpp"
+#include "db.hpp"
+#include "manager.hpp"
+#include "types.hpp"

@@ -43,7 +43,8 @@ namespace {
 
             sqlite3_stmt* stmt = nullptr;
             const std::string q = "SELECT COUNT(*) FROM " + table + ";";
-            if (sqlite3_prepare_v2(conn.get(), q.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+            if (sqlite3_prepare_v2(conn.get(), q.c_str(), -1, &stmt, nullptr) !=
+                SQLITE_OK) {
                 return -1;
             }
             long long n = -1;
@@ -108,8 +109,9 @@ TEST_F(ManagerTest, ConnectEnablesWal) {
     sqlite3_open(path().c_str(), &raw);
     sql::sqlite3_ptr conn{raw};
     sqlite3_stmt* stmt = nullptr;
-    ASSERT_EQ(sqlite3_prepare_v2(conn.get(), "PRAGMA journal_mode;", -1, &stmt, nullptr),
-              SQLITE_OK);
+    ASSERT_EQ(
+        sqlite3_prepare_v2(conn.get(), "PRAGMA journal_mode;", -1, &stmt, nullptr),
+        SQLITE_OK);
     ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
     EXPECT_STREQ(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), "wal");
     sqlite3_finalize(stmt);
@@ -205,8 +207,9 @@ TEST_F(ManagerTest, ConcurrentInsertsRespectPoolLimit) {
     {
         auto c = mgr.get_client();
         ASSERT_NE(c, nullptr);
-        ASSERT_TRUE(c->exec("CREATE TABLE t(id INTEGER PRIMARY KEY, th INTEGER, n INTEGER,"
-                            " UNIQUE(th, n));"));
+        ASSERT_TRUE(c->exec(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, th INTEGER, n INTEGER,"
+            " UNIQUE(th, n));"));
     }
 
     std::atomic<int> in_use{0};
@@ -229,8 +232,9 @@ TEST_F(ManagerTest, ConcurrentInsertsRespectPoolLimit) {
                     while (prev < now && !peak.compare_exchange_weak(prev, now)) {
                     }
 
-                    if (c->exec("INSERT INTO t(th, n) VALUES(" + std::to_string(t) + "," +
-                                std::to_string(n) + ");")) {
+                    if (c->exec(
+                            "INSERT INTO t(th, n) VALUES(" + std::to_string(t) + "," +
+                            std::to_string(n) + ");")) {
                         ++ok;
                     }
                     --in_use;

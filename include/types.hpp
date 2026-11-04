@@ -11,6 +11,20 @@ namespace sql {
     };
     using sqlite3_ptr = std::unique_ptr<sqlite3, sqlite3_deleter>;
 
+    struct sqlite3_stmt_deleter {
+        void operator()(sqlite3_stmt* p) const noexcept { sqlite3_finalize(p); }
+    };
+    using sqlite3_stmt_ptr = std::unique_ptr<sqlite3_stmt, sqlite3_stmt_deleter>;
+
+    // sqlite 에서 지정하는 타입만 쓰자
+    using sqlite_text = std::string;
+    using sqlite_int64 = std::int64_t;
+    using sqlite_double = double;
+
+    // 내부용 타입
+    using cursor_id = std::uint64_t;
+
+    // enum 정의
     enum class e_manager_status : std::uint8_t {
         init,        // 초기화
         connecting,  // 연결중

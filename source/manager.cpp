@@ -3,10 +3,10 @@
 #include <sqlite3.h>
 #include <memory>
 
-#include "types.hpp"
 #include "manager.hpp"
-#include "db.hpp"
 #include "client.hpp"
+#include "types.hpp"
+#include "db.hpp"
 
 namespace sql {
 
@@ -21,7 +21,7 @@ namespace sql {
 
     bool manager::connect() {
         std::unique_lock lock{_mutex};
-        if (_status != e_manager_status::init) {
+        if (_status != e_manager_status::init) [[unlikely]] {
             ILOG_ERROR("manager is not init: status={}", to_string(_status));
             return false;
         }
@@ -71,8 +71,6 @@ namespace sql {
             return nullptr;
         }
 
-
-
         // 커넥션풀이 생겼거나 프로그램이 종료 되었을때 깨어난다
         // 종료할때 작업중인 모든 요청을 확인하기 위해서 _wait_db 로 체크해준다.
         _wait_db += 1;
@@ -82,14 +80,8 @@ namespace sql {
         _wait_db -= 1;
 
         // 기다렸다가 호출되었는데 종료되었으면 실패로 반납
-        if (_status == e_manager_status::terminated) {
+        if (_status == e_manager_status::terminated) [[unlikely]] {
             _notify_full.notify_all(); // 대기에서 빠져나갔다고 소멸자한테 알림
-            ILOG_ERROR("manager is terminated");
-            return nullptr;
-        }
-
-        // 종료되었다면 nullptr 을 반납하고 종료한다.
-        if (_status == e_manager_status::terminated) {
             ILOG_ERROR("manager is terminated");
             return nullptr;
         }
