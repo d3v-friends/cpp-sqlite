@@ -16,10 +16,7 @@ namespace csql {
     using sqlite3_stmt_ptr = std::unique_ptr<sqlite3_stmt, sqlite3_stmt_deleter>;
 
 
-    // sqlite 에서 지정하는 타입만 쓰자
-    using sqlite_text = std::string;
-    using sqlite_int64 = std::int64_t;
-    using sqlite_double = double;
+
 
     // enum 정의
     enum class e_manager_status : std::uint8_t {
