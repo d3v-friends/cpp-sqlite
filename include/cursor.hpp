@@ -1,28 +1,29 @@
 #pragma once
-#include <mutex>
+#include <memory>
 #include <optional>
-
 #include "types.hpp"
-#include "cursor_base.hpp"
 
-namespace sql {
-    template <class T> class cursor : public cursor_base {
+namespace csql {
+    class connection;
+
+    template <class T> class cursor {
     public:
-        explicit cursor(const cursor_id id, sqlite3_stmt_ptr stmt)
-            : cursor_base{id, std::move(stmt)} {}
-        ~cursor() override = default;
+        explicit cursor(std::shared_ptr<connection> conn, sqlite3_stmt_ptr stmt)
+            : _conn{std::move(conn)}, _stmt{std::move(stmt)} {}
+        ~cursor();
         cursor(const cursor&) = delete;
         cursor& operator=(const cursor&) = delete;
-        cursor(cursor&&) = delete;
-        cursor& operator=(cursor&&) = delete;
+        cursor(cursor&&) = default;
+        cursor& operator=(cursor&&) = default;
 
-        // 조회된 것을 하나씩 가저온다.
         std::optional<T> next();
 
     private:
-        mutable std::mutex _mutex;
+        std::shared_ptr<connection> _conn;
+        sqlite3_stmt_ptr _stmt;
     };
 
-} // namespace sql
+
+} // namespace csql
 
 #include "cursor.inl"
