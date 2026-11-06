@@ -14,8 +14,8 @@
 #include "types.hpp"
 
 namespace csql {
-    template <class T, typename... ARGS>
-    std::unique_ptr<cursor<T>> client::query(const std::string& sql, ARGS&&... args) {
+    template <typename... ARGS>
+    std::unique_ptr<cursor> client::query(const std::string& sql, ARGS&&... args) {
         if (sql.empty()) [[unlikely]] {
             ILOG_ERROR("sql is empty");
             return nullptr;
@@ -39,7 +39,7 @@ namespace csql {
             return nullptr;
         }
 
-        return std::make_unique<cursor<T>>(_conn, sqlite3_stmt_ptr{stmt});
+        return std::make_unique<cursor>(_conn, sqlite3_stmt_ptr{stmt});
     }
 
     /*

@@ -4,7 +4,7 @@
 
 namespace csql {
     class connection;
-    template <class T> class cursor;
+    class cursor;
 
     class client {
     public:
@@ -17,14 +17,14 @@ namespace csql {
 
         [[nodiscard]] bool exec(const std::string& sql) const;
 
-        template <class T, typename... ARGS>
-        std::unique_ptr<cursor<T>> query(const std::string& sql, ARGS&&... args);
+        template <typename... ARGS>
+        std::unique_ptr<cursor> query(const std::string& sql, ARGS&&... args);
 
     private:
         std::shared_ptr<connection> _conn;
 
         template <class T> int bind_stmt(sqlite3_stmt* stmt, int i, T& value);
     };
-} // namespace sql
+} // namespace csql
 
 #include "client.inl"

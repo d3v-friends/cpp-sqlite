@@ -4,9 +4,10 @@
 #include "types.hpp"
 
 namespace csql {
+    class sqlite_row;
     class connection;
 
-    template <class T> class cursor {
+    class cursor {
     public:
         explicit cursor(std::shared_ptr<connection> conn, sqlite3_stmt_ptr stmt)
             : _conn{std::move(conn)}, _stmt{std::move(stmt)} {}
@@ -16,14 +17,11 @@ namespace csql {
         cursor(cursor&&) = default;
         cursor& operator=(cursor&&) = default;
 
-        std::optional<T> next();
+        std::optional<sqlite_row> next();
 
     private:
         std::shared_ptr<connection> _conn;
         sqlite3_stmt_ptr _stmt;
     };
 
-
 } // namespace csql
-
-#include "cursor.inl"
