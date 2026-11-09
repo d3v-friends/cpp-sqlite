@@ -7,6 +7,8 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <utility>
+#include <filesystem>
 
 #include "types.hpp"
 #include "manager.hpp"

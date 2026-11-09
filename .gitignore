@@ -19,7 +19,7 @@ CMakeUserPresets.json
 # vcpkg
 vcpkg_installed
 
-# trash
+# temporary
 /dev
 
 # agent
@@ -31,4 +31,4 @@ IDEA.md
 
 # etc
 /docs/
-
+docs

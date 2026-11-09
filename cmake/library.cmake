@@ -5,7 +5,7 @@ include(FetchContent)
 FetchContent_Declare(
         ctls
         GIT_REPOSITORY https://github.com/d3v-friends/cpp-tools.git
-        GIT_TAG v0.0.38
+        GIT_TAG v0.0.42
 )
 FetchContent_MakeAvailable(ctls)
 

@@ -3,6 +3,7 @@
 #include <functional>
 #include <utility>
 #include <mutex>
+#include <stdexcept>
 
 namespace csql {
     // shared_ptr 로 감싸서 공유한다
@@ -10,14 +11,24 @@ namespace csql {
     class connection {
     public:
         explicit connection(sqlite3* db, std::function<void(sqlite3* db)> on_release)
-            : _on_release{std::move(on_release)}, _db{db} {}
-        ~connection() {
-            // shared_ptr 사용이 모두 종료되었을때 release 된다.
-            _on_release(_db);
+            : _on_release{std::move(on_release)}, _db{db} {
+            if (!_on_release) {
+                throw std::invalid_argument("connection: on_release is empty");
+            }
         }
+
+        ~connection() {
+            if (_on_release) {
+                _on_release(_db);
+            }
+        }
+
         connection(const connection&) = delete;
+
         connection& operator=(const connection&) = delete;
+
         connection(connection&&) = delete;
+
         connection& operator=(connection&&) = delete;
 
         [[nodiscard]] sqlite3* get_db() const noexcept { return _db; }
@@ -28,4 +39,4 @@ namespace csql {
         const std::function<void(sqlite3* db)> _on_release;
         sqlite3* _db;
     };
-} // namespace sql
+} // namespace csql

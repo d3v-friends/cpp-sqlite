@@ -1,12 +1,12 @@
 #pragma once
 #include <mutex>
-#include <cstdint>
 #include <sqlite3.h>
 #include <deque>
-#include <string>
 #include <filesystem>
 #include <condition_variable>
 #include <vector>
+#include <memory>
+#include <cstddef>
 
 #include "types.hpp"
 

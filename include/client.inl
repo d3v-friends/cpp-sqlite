@@ -1,7 +1,4 @@
 #pragma once
-#include "connection.hpp"
-
-#include <optional>
 #include <memory>
 #include <ranges>
 #include <type_traits>
@@ -9,7 +6,10 @@
 #include <string_view>
 #include <ctls/ctls.hpp>
 #include <sqlite3.h>
+#include <concepts>
+#include <cstddef>
 
+#include "connection.hpp"
 #include "cursor.hpp"
 #include "types.hpp"
 
@@ -52,6 +52,7 @@ namespace csql {
     template <class T>
     concept byte_range = std::ranges::contiguous_range<T> &&
                          std::same_as<std::ranges::range_value_t<T>, std::uint8_t>;
+
     template <class T> int client::bind_stmt(sqlite3_stmt* stmt, int i, T& value) {
         using U = std::remove_cvref_t<T>;
         if constexpr (std::is_same_v<U, std::nullptr_t>) {
@@ -63,8 +64,11 @@ namespace csql {
         } else if constexpr (std::is_convertible_v<const U&, std::string_view>) {
             const std::string_view s = value;
             return sqlite3_bind_text(
-                stmt, i, s.data(), static_cast<int>(s.size()), SQLITE_TRANSIENT);
+                stmt, i, s.data() ? s.data() : "",
+                static_cast<int>(s.size()), SQLITE_TRANSIENT);
         } else if constexpr (byte_range<U>) {
+            if (std::ranges::empty(value))
+                return sqlite3_bind_zeroblob(stmt, i, 0); // 길이 0 blob
             return sqlite3_bind_blob(
                 stmt, i, std::ranges::data(value),
                 static_cast<int>(std::ranges::size(value)), SQLITE_TRANSIENT);

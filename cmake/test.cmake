@@ -1,5 +1,8 @@
 string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_LOWER)
 if (BUILD_TYPE_LOWER STREQUAL "debug")
+    # 테스트 활성화
+    enable_testing()
+
     # test 설정
     file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp")
     list(FILTER TEST_SOURCES INCLUDE REGEX "_test\\.cpp$") # 테스트 파일만 포함
@@ -12,14 +15,15 @@ if (BUILD_TYPE_LOWER STREQUAL "debug")
         )
         target_include_directories(
                 ${TEST_PROGRAM} PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/include"
                 "${CMAKE_CURRENT_SOURCE_DIR}/source"
         )
         find_package(GTest CONFIG REQUIRED)
         target_link_libraries(
                 ${TEST_PROGRAM}
                 PRIVATE
-                ${PROJECT_NAME}
                 ${LIBRARY}
+                csql::csql
                 GTest::gmock_main
         )
         include(GoogleTest)

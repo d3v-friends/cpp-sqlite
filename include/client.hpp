@@ -1,6 +1,9 @@
 #pragma once
+#include <ctls/ctls.hpp>
 #include <memory>
 #include <string>
+#include <sqlite3.h>
+#include <utility>
 
 namespace csql {
     class connection;
@@ -8,14 +11,20 @@ namespace csql {
 
     class client {
     public:
-        explicit client(std::shared_ptr<connection> conn) : _conn{std::move(conn)} {}
+        explicit client(std::shared_ptr<connection> conn) : _conn{std::move(conn)} {
+        }
+
         ~client();
+
         client(const client&) = delete;
+
         client& operator=(const client&) = delete;
+
         client(client&&) = default;
+
         client& operator=(client&&) = default;
 
-        [[nodiscard]] bool exec(const std::string& sql) const;
+        [[nodiscard]] ctls::status exec(const std::string& sql) const;
 
         template <typename... ARGS>
         std::unique_ptr<cursor> query(const std::string& sql, ARGS&&... args);

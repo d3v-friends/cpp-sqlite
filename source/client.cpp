@@ -1,25 +1,28 @@
 #include <ctls/ctls.hpp>
+#include <sqlite3.h>
+#include <string>
+#include <format>
 
 #include "client.hpp"
-
 #include "connection.hpp"
 
 namespace csql {
     client::~client() = default;
 
-    bool client::exec(const std::string& sql) const {
+    ctls::status client::exec(const std::string& sql) const {
         if (sql.empty()) {
-            ILOG_ERROR("sql must not be empty");
-            return false;
+            return ctls::failed("sql must not be empty");
         }
         char* err = nullptr;
         if (sqlite3_exec(_conn->get_db(), sql.c_str(), nullptr, nullptr, &err) !=
             SQLITE_OK) {
-            ILOG_ERROR("sqlite3_exec failed: {}", err);
+            const auto message = std::format(
+                "sqlite3_exec failed: error={}", err ? err : "unknown error");
             sqlite3_free(err);
-            return false;
+            return ctls::failed(message);
         }
-        return true;
+
+        return ctls::ok();
     }
 
 } // namespace sql

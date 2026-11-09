@@ -1,3 +1,5 @@
+#include <variant>
+
 #include "sqlite_row.hpp"
 
 namespace csql {
