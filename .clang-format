@@ -30,14 +30,14 @@ AlignConsecutiveDeclarations: false
 AlignTrailingComments: true
 
 # 네임스페이스
-NamespaceIndentation: All         # namespace 안 코드는 들여쓰기 안 함 (지금 Engine 네임스페이스 스타일과 일치)
+NamespaceIndentation: All         # namespace 안 코드는 들여쓰기 안 함
 
 # include 정렬
 SortIncludes: false # 헤더자동정렬은 라이브러리마다 요구사항이 있어서 불가능하다. 직접해야한다
 
 # 파라미터
 BinPackParameters: false  #파라미터를 여러줄 가능하게 다
-AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: true
 AlignAfterOpenBracket: AlwaysBreak
 
 # 브레이스

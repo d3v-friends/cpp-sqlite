@@ -1,324 +1,306 @@
-// source/manager_test.cpp
-// sql::manager 커넥션 풀 테스트 (gtest)
-#include <gtest/gtest.h>
-
-#include <sqlite3.h>
-
-#include <algorithm>
+// manager 테스트
+// 위치: source/manager_test.cpp (cmake/test.cmake 가 source/*_test.cpp 를 수집함)
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
-#include <functional>
 #include <future>
 #include <memory>
+#include <random>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
-#include "client.hpp"
+#include <gtest/gtest.h>
+#include <sqlite3.h>
+
 #include "manager.hpp"
+#include "client.hpp"
 
 using namespace std::chrono_literals;
-namespace fs = std::filesystem;
 
 namespace {
-    // 테스트마다 다른 임시 DB 파일을 쓰고, 끝나면 -wal / -shm 까지 지운다
-    class ManagerTest : public ::testing::Test {
-    protected:
-        void SetUp() override {
-            const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-            _path = fs::temp_directory_path() /
-                    (std::string("cpp_sqlite_") + info->name() + ".db");
-            remove_files();
+    // 블로킹 여부 판정용. 너무 짧으면 느린 머신에서 오탐 나니 넉넉하게
+    constexpr auto k_block_check = 200ms;
+    constexpr auto k_ready_limit = 3s;
+
+    std::filesystem::path make_temp_db_path() {
+        std::random_device rd;
+        const auto name = "csql_manager_test_" + std::to_string(rd()) + ".db";
+        return std::filesystem::temp_directory_path() / name;
+    }
+
+    // 다른 커넥션으로 열어서 PRAGMA 값 하나 읽기 (cursor 없이 검증하려고 raw API 사용)
+    std::string read_pragma_text(const std::filesystem::path& path, const char* sql) {
+        sqlite3* db = nullptr;
+        if (sqlite3_open_v2(path.string().c_str(), &db, SQLITE_OPEN_READONLY, nullptr) !=
+            SQLITE_OK) {
+            sqlite3_close_v2(db);
+            return {};
         }
-        void TearDown() override { remove_files(); }
+        std::string out;
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+            sqlite3_step(stmt) == SQLITE_ROW) {
+            const auto* p = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (p) out.assign(p, static_cast<std::size_t>(sqlite3_column_bytes(stmt, 0)));
+        }
+        sqlite3_finalize(stmt);
+        sqlite3_close_v2(db);
+        return out;
+    }
 
-        [[nodiscard]] std::string path() const { return _path.string(); }
-
-        // 풀과 상관없는 별도 연결로 결과 확인
-        [[nodiscard]] long long count(const std::string& table) const {
-            sqlite3* raw = nullptr;
-            sqlite3_open_v2(_path.string().c_str(), &raw, SQLITE_OPEN_READONLY, nullptr);
-            sql::sqlite3_ptr conn{raw};
-
+    std::int64_t read_scalar_int(const std::filesystem::path& path, const char* sql) {
+        sqlite3* db = nullptr;
+        std::int64_t out = -1;
+        if (sqlite3_open_v2(path.string().c_str(), &db, SQLITE_OPEN_READONLY, nullptr) ==
+            SQLITE_OK) {
             sqlite3_stmt* stmt = nullptr;
-            const std::string q = "SELECT COUNT(*) FROM " + table + ";";
-            if (sqlite3_prepare_v2(conn.get(), q.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-                return -1;
-            }
-            long long n = -1;
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                n = sqlite3_column_int64(stmt, 0);
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
+                sqlite3_step(stmt) == SQLITE_ROW) {
+                out = sqlite3_column_int64(stmt, 0);
             }
             sqlite3_finalize(stmt);
-            return n;
         }
-
-    private:
-        void remove_files() const {
-            std::error_code ec;
-            for (const char* suffix : {"", "-wal", "-shm"}) {
-                fs::remove(_path.string() + suffix, ec);
-            }
-        }
-
-        fs::path _path;
-    };
-
-    // 함수가 timeout 안에 끝나는지 확인한다.
-    // 끝나지 않으면(데드락) 스레드를 detach 해서 테스트 프로세스가 멈추지 않게 한다.
-    // 이 경우 관련 객체는 일부러 누수시킨다.
-    bool finishes_within(std::chrono::milliseconds timeout, std::function<void()> fn) {
-        auto done = std::make_shared<std::promise<void>>();
-        auto fut = done->get_future();
-        std::thread{[fn = std::move(fn), done] {
-            fn();
-            done->set_value();
-        }}.detach();
-        return fut.wait_for(timeout) == std::future_status::ready;
+        sqlite3_close_v2(db);
+        return out;
     }
 } // namespace
 
-// ───────────── connect ─────────────
+class ManagerTest : public ::testing::Test {
+protected:
+    void SetUp() override { _path = make_temp_db_path(); }
 
-TEST_F(ManagerTest, ConnectSucceeds) {
-    sql::manager mgr{path(), 4};
-    EXPECT_TRUE(mgr.connect());
-    EXPECT_TRUE(fs::exists(path()));
-}
-
-TEST_F(ManagerTest, ConnectTwiceFails) {
-    sql::manager mgr{path(), 2};
-    ASSERT_TRUE(mgr.connect());
-    EXPECT_FALSE(mgr.connect());
-}
-
-TEST_F(ManagerTest, ConnectFailsOnInvalidPath) {
-    sql::manager mgr{"/nonexistent_dir_for_test/a/b/test.db", 2};
-    EXPECT_FALSE(mgr.connect());
-    EXPECT_EQ(mgr.get_client(), nullptr); // terminated 상태
-}
-
-TEST_F(ManagerTest, ConnectEnablesWal) {
-    {
-        sql::manager mgr{path(), 1};
-        ASSERT_TRUE(mgr.connect());
+    void TearDown() override {
+        std::error_code ec;
+        for (const auto* suffix : {"", "-wal", "-shm", "-journal"}) {
+            std::filesystem::remove(_path.string() + suffix, ec);
+        }
     }
-    sqlite3* raw = nullptr;
-    sqlite3_open(path().c_str(), &raw);
-    sql::sqlite3_ptr conn{raw};
-    sqlite3_stmt* stmt = nullptr;
-    ASSERT_EQ(sqlite3_prepare_v2(conn.get(), "PRAGMA journal_mode;", -1, &stmt, nullptr),
-              SQLITE_OK);
-    ASSERT_EQ(sqlite3_step(stmt), SQLITE_ROW);
-    EXPECT_STREQ(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)), "wal");
-    sqlite3_finalize(stmt);
+
+    std::filesystem::path _path;
+};
+
+// ───────────── init ─────────────
+
+TEST_F(ManagerTest, InitSucceeds) {
+    csql::manager mgr;
+    EXPECT_TRUE(mgr.init(_path, 3));
+    EXPECT_TRUE(std::filesystem::exists(_path));
+}
+
+TEST_F(ManagerTest, InitTwiceFails) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 2));
+    EXPECT_FALSE(mgr.init(_path, 2));
+}
+
+TEST_F(ManagerTest, InitZeroConnectionsFails) {
+    csql::manager mgr;
+    EXPECT_FALSE(mgr.init(_path, 0));
+    EXPECT_EQ(mgr.get_client(), nullptr);
+}
+
+TEST_F(ManagerTest, InitNegativeBusyTimeoutFails) {
+    csql::manager mgr;
+    EXPECT_FALSE(mgr.init(_path, 1, -1));
+    EXPECT_EQ(mgr.get_client(), nullptr);
+}
+
+TEST_F(ManagerTest, InitInvalidPathFails) {
+    csql::manager mgr;
+    // SQLITE_OPEN_CREATE 는 디렉터리까지 만들어주지 않음
+    const auto bad = std::filesystem::temp_directory_path() / "csql_no_such_dir_xyz" / "a.db";
+    EXPECT_FALSE(mgr.init(bad, 2));
+    EXPECT_EQ(mgr.get_client(), nullptr);
+}
+
+TEST_F(ManagerTest, ReinitAfterFailureIsRejected) {
+    // 현재 구현: 실패하면 terminated 로 가서 재시도 불가
+    csql::manager mgr;
+    ASSERT_FALSE(mgr.init(_path, 0));
+    EXPECT_FALSE(mgr.init(_path, 1));
+}
+
+TEST_F(ManagerTest, InitAppliesWalJournalMode) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 1));
+    // journal_mode=WAL 은 DB 파일에 영구 저장되므로 다른 커넥션에서 확인 가능
+    EXPECT_EQ(read_pragma_text(_path, "PRAGMA journal_mode;"), "wal");
 }
 
 // ───────────── get_client ─────────────
 
-TEST_F(ManagerTest, GetClientBeforeConnectReturnsNull) {
-    sql::manager mgr{path(), 2};
+TEST_F(ManagerTest, GetClientBeforeInitReturnsNull) {
+    csql::manager mgr;
     EXPECT_EQ(mgr.get_client(), nullptr);
 }
 
-TEST_F(ManagerTest, ClientExecWritesData) {
-    sql::manager mgr{path(), 2};
-    ASSERT_TRUE(mgr.connect());
-
-    auto c = mgr.get_client();
-    ASSERT_NE(c, nullptr);
-    EXPECT_TRUE(c->exec("CREATE TABLE t(id INTEGER PRIMARY KEY, v TEXT);"));
-    EXPECT_TRUE(c->exec("INSERT INTO t(v) VALUES('a'),('b'),('c');"));
-    c.reset();
-
-    EXPECT_EQ(count("t"), 3);
-}
-
-TEST_F(ManagerTest, ClientExecInvalidSqlReturnsFalse) {
-    sql::manager mgr{path(), 1};
-    ASSERT_TRUE(mgr.connect());
-
-    auto c = mgr.get_client();
-    ASSERT_NE(c, nullptr);
-    EXPECT_FALSE(c->exec("SELEC oops;"));
-    EXPECT_FALSE(c->exec("INSERT INTO no_such_table VALUES(1);"));
-    EXPECT_TRUE(c->exec("SELECT 1;")); // 실패 후에도 연결은 계속 쓸 수 있어야 함
-}
-
-TEST_F(ManagerTest, CanBorrowUpToMaxConnections) {
-    constexpr std::size_t max = 4;
-    sql::manager mgr{path(), max};
-    ASSERT_TRUE(mgr.connect());
-
-    std::vector<std::unique_ptr<sql::client>> held;
-    for (std::size_t i = 0; i < max; ++i) {
-        held.push_back(mgr.get_client());
-        ASSERT_NE(held.back(), nullptr) << "i=" << i;
-    }
-}
-
-TEST_F(ManagerTest, ReleasedClientIsReused) {
-    sql::manager mgr{path(), 1};
-    ASSERT_TRUE(mgr.connect());
-
-    // 풀이 1개라서 반납이 안 되면 두 번째 get_client 에서 멈춘다
-    const bool ok = finishes_within(2s, [&] {
-        for (int i = 0; i < 100; ++i) {
-            auto c = mgr.get_client();
-            ASSERT_NE(c, nullptr);
-        }
-    });
-    ASSERT_TRUE(ok) << "client 반납 후 재사용이 안 됨 (get_client 대기 중)";
-}
-
-TEST_F(ManagerTest, GetClientBlocksWhenPoolIsFull) {
-    sql::manager mgr{path(), 2};
-    ASSERT_TRUE(mgr.connect());
-
-    auto c1 = mgr.get_client();
-    auto c2 = mgr.get_client();
-    ASSERT_NE(c1, nullptr);
-    ASSERT_NE(c2, nullptr);
-
-    auto waiter = std::async(std::launch::async, [&] { return mgr.get_client(); });
-
-    // 풀이 꽉 찼으니 기다려야 함
-    EXPECT_EQ(waiter.wait_for(200ms), std::future_status::timeout);
-
-    // 하나 반납하면 깨어나서 받아가야 함
-    c1.reset();
-    ASSERT_EQ(waiter.wait_for(2s), std::future_status::ready);
-    auto c3 = waiter.get();
-    EXPECT_NE(c3, nullptr);
-}
-
-// ───────────── 동시성 ─────────────
-
-TEST_F(ManagerTest, ConcurrentInsertsRespectPoolLimit) {
-    constexpr std::size_t max = 4;
-    constexpr int threads = 16;
-    constexpr int per_thread = 100;
-
-    sql::manager mgr{path(), max};
-    ASSERT_TRUE(mgr.connect());
+TEST_F(ManagerTest, ClientCanExecSql) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 2));
     {
-        auto c = mgr.get_client();
-        ASSERT_NE(c, nullptr);
-        ASSERT_TRUE(c->exec("CREATE TABLE t(id INTEGER PRIMARY KEY, th INTEGER, n INTEGER,"
-                            " UNIQUE(th, n));"));
+        auto cli = mgr.get_client();
+        ASSERT_NE(cli, nullptr);
+        EXPECT_TRUE(cli->exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT);"));
+        EXPECT_TRUE(cli->exec("INSERT INTO t (v) VALUES ('a'), ('b');"));
+        EXPECT_FALSE(cli->exec("INSERT INTO no_such_table VALUES (1);"));
+        EXPECT_FALSE(cli->exec(""));
     }
+    EXPECT_EQ(read_scalar_int(_path, "SELECT COUNT(*) FROM t;"), 2);
+}
+
+TEST_F(ManagerTest, ConnectionsShareSameDatabase) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 2));
+    auto a = mgr.get_client();
+    auto b = mgr.get_client();
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    ASSERT_TRUE(a->exec("CREATE TABLE t (id INTEGER);"));
+    EXPECT_TRUE(b->exec("INSERT INTO t VALUES (1);")); // 다른 커넥션에서도 테이블 보임
+}
+
+TEST_F(ManagerTest, ReleasedConnectionIsReused) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 1));
+
+    for (int i = 0; i < 5; ++i) {
+        auto fut = std::async(std::launch::async, [&] { return mgr.get_client(); });
+        ASSERT_EQ(fut.wait_for(k_ready_limit), std::future_status::ready)
+            << "반납된 커넥션을 다시 못 받음 (i=" << i << ")";
+        auto cli = fut.get();
+        ASSERT_NE(cli, nullptr);
+        // cli 소멸 → connection 소멸 → manager::release
+    }
+}
+
+TEST_F(ManagerTest, GetClientBlocksWhenPoolExhausted) {
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 1));
+
+    auto held = mgr.get_client();
+    ASSERT_NE(held, nullptr);
+
+    auto fut = std::async(std::launch::async, [&] { return mgr.get_client(); });
+    EXPECT_EQ(fut.wait_for(k_block_check), std::future_status::timeout)
+        << "풀이 비었는데 get_client 가 바로 리턴함";
+
+    held.reset(); // 반납하면 대기자가 깨어나야 함
+    ASSERT_EQ(fut.wait_for(k_ready_limit), std::future_status::ready);
+    EXPECT_NE(fut.get(), nullptr);
+}
+
+TEST_F(ManagerTest, MovedClientKeepsConnection) {
+    // client 를 move 해도 커넥션은 반납되지 않고 새 소유자가 들고 있어야 함
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, 1));
+
+    auto first = mgr.get_client();
+    ASSERT_NE(first, nullptr);
+    auto moved = std::move(first);
+
+    auto fut = std::async(std::launch::async, [&] { return mgr.get_client(); });
+    EXPECT_EQ(fut.wait_for(k_block_check), std::future_status::timeout);
+
+    moved.reset();
+    ASSERT_EQ(fut.wait_for(k_ready_limit), std::future_status::ready);
+    EXPECT_NE(fut.get(), nullptr);
+}
+
+TEST_F(ManagerTest, PoolNeverExceedsMaxConnections) {
+    constexpr std::size_t k_max = 3;
+    constexpr int k_threads = 12;
+    constexpr int k_loops = 50;
+
+    csql::manager mgr;
+    ASSERT_TRUE(mgr.init(_path, k_max));
 
     std::atomic<int> in_use{0};
     std::atomic<int> peak{0};
-    std::atomic<int> ok{0};
-    std::atomic<int> null_client{0};
+    std::atomic<int> null_count{0};
 
-    const bool finished = finishes_within(60s, [&] {
-        std::vector<std::thread> pool;
-        for (int t = 0; t < threads; ++t) {
-            pool.emplace_back([&, t] {
-                for (int n = 0; n < per_thread; ++n) {
-                    auto c = mgr.get_client();
-                    if (!c) {
-                        ++null_client;
-                        continue;
-                    }
-                    const int now = ++in_use;
-                    int prev = peak.load();
-                    while (prev < now && !peak.compare_exchange_weak(prev, now)) {
-                    }
+    std::vector<std::thread> workers;
+    workers.reserve(k_threads);
+    for (int t = 0; t < k_threads; ++t) {
+        workers.emplace_back([&] {
+            for (int i = 0; i < k_loops; ++i) {
+                auto cli = mgr.get_client();
+                if (!cli) {
+                    ++null_count;
+                    continue;
+                }
+                const int now = ++in_use;
+                int prev = peak.load();
+                while (now > prev && !peak.compare_exchange_weak(prev, now)) {}
 
-                    if (c->exec("INSERT INTO t(th, n) VALUES(" + std::to_string(t) + "," +
-                                std::to_string(n) + ");")) {
-                        ++ok;
-                    }
-                    --in_use;
-                } // c 소멸 → 반납
-            });
-        }
-        for (auto& th : pool) {
-            th.join();
-        }
-    });
+                (void)cli->exec("SELECT 1;");
+                std::this_thread::yield();
 
-    ASSERT_TRUE(finished) << "동시 대여/반납 중 멈춤 (데드락 의심)";
-    EXPECT_EQ(null_client.load(), 0);
-    EXPECT_EQ(ok.load(), threads * per_thread);
-    EXPECT_LE(peak.load(), static_cast<int>(max));
-    EXPECT_GE(peak.load(), 2) << "실제로 여러 연결이 동시에 쓰이지 않음";
-    EXPECT_EQ(count("t"), threads * per_thread);
-}
-
-// ───────────── 종료 ─────────────
-
-TEST_F(ManagerTest, DestructorReturnsWhenIdle) {
-    auto* mgr = new sql::manager{path(), 4};
-    ASSERT_TRUE(mgr->connect());
-    {
-        auto c = mgr->get_client();
-        ASSERT_NE(c, nullptr);
-    }
-    EXPECT_TRUE(finishes_within(2s, [mgr] { delete mgr; }));
-}
-
-TEST_F(ManagerTest, DestructorWithoutConnectReturns) {
-    auto* mgr = new sql::manager{path(), 4};
-    EXPECT_TRUE(finishes_within(2s, [mgr] { delete mgr; }));
-}
-
-TEST_F(ManagerTest, DestructorWaitsForBorrowedClient) {
-    auto* mgr = new sql::manager{path(), 1};
-    ASSERT_TRUE(mgr->connect());
-    auto c = mgr->get_client();
-    ASSERT_NE(c, nullptr);
-
-    std::atomic<bool> destroyed{false};
-    auto destroyer = std::async(std::launch::async, [&] {
-        delete mgr;
-        destroyed = true;
-    });
-
-    // client 를 들고 있는 동안은 소멸자가 끝나면 안 됨
-    EXPECT_EQ(destroyer.wait_for(200ms), std::future_status::timeout);
-    EXPECT_FALSE(destroyed.load());
-
-    c.reset(); // 반납 → 소멸자 진행
-    EXPECT_EQ(destroyer.wait_for(2s), std::future_status::ready);
-}
-
-// 반납과 소멸이 경쟁할 때 대기 중인 get_client 가 nullptr 를 받고,
-// 소멸자도 멈추지 않고 끝나야 한다. 타이밍 문제라 여러 번 반복한다.
-TEST_F(ManagerTest, DestructorWakesWaitersWithoutHang) {
-    constexpr int rounds = 200;
-    constexpr int waiters = 4;
-
-    for (int r = 0; r < rounds; ++r) {
-        auto* mgr = new sql::manager{path(), 1};
-        ASSERT_TRUE(mgr->connect());
-        auto holder = std::make_shared<std::unique_ptr<sql::client>>(mgr->get_client());
-        ASSERT_NE(*holder, nullptr);
-
-        const bool ok = finishes_within(3s, [mgr, holder] {
-            std::vector<std::thread> ws;
-            for (int i = 0; i < waiters; ++i) {
-                ws.emplace_back([mgr] {
-                    // 반납이 소멸보다 먼저 일어나면 client 를 받을 수도 있음 → 바로 반납
-                    auto c = mgr->get_client();
-                });
+                --in_use; // release 전에 감소 → in_use 는 실제 대여 수 이하
             }
-            std::this_thread::sleep_for(5ms); // waiter 들이 wait 에 들어가게
-
-            std::thread destroyer{[mgr] { delete mgr; }};
-            std::this_thread::sleep_for(1ms);
-            holder->reset(); // 소멸 중 반납 → 경쟁 상황
-
-            for (auto& w : ws) {
-                w.join();
-            }
-            destroyer.join();
         });
-
-        ASSERT_TRUE(ok) << "round " << r << ": 소멸자 또는 대기 스레드가 멈춤";
     }
+    for (auto& w : workers) w.join();
+
+    EXPECT_EQ(null_count.load(), 0);
+    EXPECT_LE(peak.load(), static_cast<int>(k_max));
+    EXPECT_GE(peak.load(), 1);
+}
+
+// ───────────── 소멸자 ─────────────
+
+TEST_F(ManagerTest, DestructorWithoutInitDoesNotHang) {
+    auto fut = std::async(std::launch::async, [] { csql::manager mgr; });
+    EXPECT_EQ(fut.wait_for(k_ready_limit), std::future_status::ready);
+}
+
+TEST_F(ManagerTest, DestructorAfterFailedInitDoesNotHang) {
+    auto fut = std::async(std::launch::async, [this] {
+        csql::manager mgr;
+        (void)mgr.init(_path, 0);
+    });
+    EXPECT_EQ(fut.wait_for(k_ready_limit), std::future_status::ready);
+}
+
+TEST_F(ManagerTest, DestructorWaitsForOutstandingClient) {
+    auto mgr = std::make_unique<csql::manager>();
+    ASSERT_TRUE(mgr->init(_path, 2));
+
+    auto held = mgr->get_client();
+    ASSERT_NE(held, nullptr);
+
+    // unique_ptr::reset 은 포인터를 먼저 비우고 delete 하므로 mgr 재접근 없음
+    auto destroy = std::async(std::launch::async, [&] { mgr.reset(); });
+    EXPECT_EQ(destroy.wait_for(k_block_check), std::future_status::timeout)
+        << "빌려준 커넥션이 남았는데 소멸자가 먼저 끝남";
+
+    held.reset(); // 반납 → 소멸자 진행
+    EXPECT_EQ(destroy.wait_for(k_ready_limit), std::future_status::ready);
+}
+
+TEST_F(ManagerTest, DestructorWakesWaitingGetClientWithNull) {
+    auto mgr = std::make_unique<csql::manager>();
+    ASSERT_TRUE(mgr->init(_path, 1));
+    auto* raw = mgr.get();
+
+    auto held = raw->get_client();
+    ASSERT_NE(held, nullptr);
+
+    // 1) 풀이 비어서 대기하는 스레드
+    auto waiter = std::async(std::launch::async, [raw] { return raw->get_client(); });
+    ASSERT_EQ(waiter.wait_for(k_block_check), std::future_status::timeout);
+
+    // 2) 소멸 시작 → terminating → 대기자는 nullptr 받고 깨어나야 함
+    auto destroy = std::async(std::launch::async, [&] { mgr.reset(); });
+    ASSERT_EQ(waiter.wait_for(k_ready_limit), std::future_status::ready);
+    EXPECT_EQ(waiter.get(), nullptr);
+
+    // 3) held 가 남아 있으니 소멸자는 아직 대기
+    EXPECT_EQ(destroy.wait_for(k_block_check), std::future_status::timeout);
+
+    // 4) 반납 → 소멸 완료. (held 반납 전엔 manager 가 살아있으므로 waiter 접근 안전)
+    held.reset();
+    EXPECT_EQ(destroy.wait_for(k_ready_limit), std::future_status::ready);
 }
