@@ -10,10 +10,10 @@
 #include <optional>
 #include <string>
 
-#include "types.hpp"
-#include "cursor.hpp"
-#include "connection.hpp"
-#include "sqlite_row.hpp"
+#include "csql/types.hpp"
+#include "csql/cursor.hpp"
+#include "csql/connection.hpp"
+#include "csql/sqlite_row.hpp"
 
 namespace csql {
     cursor::~cursor() = default;

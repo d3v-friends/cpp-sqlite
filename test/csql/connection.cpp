@@ -18,7 +18,7 @@
 #include <sqlite3.h>
 #include <gtest/gtest.h>
 
-#include "connection.hpp"
+#include "csql/connection.hpp"
 
 using namespace std::chrono_literals;
 

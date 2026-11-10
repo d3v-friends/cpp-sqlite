@@ -3,8 +3,8 @@
 #include <string>
 #include <format>
 
-#include "client.hpp"
-#include "connection.hpp"
+#include "csql/client.hpp"
+#include "csql/connection.hpp"
 
 namespace csql {
     client::~client() = default;

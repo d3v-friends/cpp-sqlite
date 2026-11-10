@@ -32,4 +32,4 @@ namespace csql {
 
         return *value;
     }
-}
+} // namespace csql

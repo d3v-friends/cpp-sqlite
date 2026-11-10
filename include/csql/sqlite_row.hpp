@@ -20,8 +20,7 @@ namespace csql {
         explicit sqlite_row() = default;
 
         explicit sqlite_row(std::vector<sqlite_values> values)
-            : _values(std::move(values)) {
-        }
+            : _values(std::move(values)) {}
 
         ~sqlite_row() = default;
 
@@ -37,9 +36,7 @@ namespace csql {
 
         [[nodiscard]] bool is_null(std::size_t index) const;
 
-        [[nodiscard]] bool is_empty() const {
-            return _values.empty();
-        }
+        [[nodiscard]] bool is_empty() const { return _values.empty(); }
 
     private:
         std::vector<sqlite_values> _values;

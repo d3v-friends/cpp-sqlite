@@ -10,10 +10,10 @@
 #include <utility>
 #include <filesystem>
 
-#include "types.hpp"
-#include "manager.hpp"
-#include "connection.hpp"
-#include "client.hpp"
+#include "csql/types.hpp"
+#include "csql/manager.hpp"
+#include "csql/connection.hpp"
+#include "csql/client.hpp"
 
 namespace csql {
 

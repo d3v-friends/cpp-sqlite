@@ -15,8 +15,8 @@
 #include <gtest/gtest.h>
 #include <sqlite3.h>
 
-#include "manager.hpp"
-#include "client.hpp"
+#include "csql/manager.hpp"
+#include "csql/client.hpp"
 
 using namespace std::chrono_literals;
 
@@ -44,7 +44,9 @@ namespace {
         if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK &&
             sqlite3_step(stmt) == SQLITE_ROW) {
             const auto* p = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (p) out.assign(p, static_cast<std::size_t>(sqlite3_column_bytes(stmt, 0)));
+            if (p) {
+                out.assign(p, static_cast<std::size_t>(sqlite3_column_bytes(stmt, 0)));
+            }
         }
         sqlite3_finalize(stmt);
         sqlite3_close_v2(db);
@@ -111,7 +113,8 @@ TEST_F(ManagerTest, InitNegativeBusyTimeoutFails) {
 TEST_F(ManagerTest, InitInvalidPathFails) {
     csql::manager mgr;
     // SQLITE_OPEN_CREATE 는 디렉터리까지 만들어주지 않음
-    const auto bad = std::filesystem::temp_directory_path() / "csql_no_such_dir_xyz" / "a.db";
+    const auto bad =
+        std::filesystem::temp_directory_path() / "csql_no_such_dir_xyz" / "a.db";
     EXPECT_FALSE(mgr.init(bad, 2));
     EXPECT_EQ(mgr.get_client(), nullptr);
 }
@@ -233,7 +236,8 @@ TEST_F(ManagerTest, PoolNeverExceedsMaxConnections) {
                 }
                 const int now = ++in_use;
                 int prev = peak.load();
-                while (now > prev && !peak.compare_exchange_weak(prev, now)) {}
+                while (now > prev && !peak.compare_exchange_weak(prev, now)) {
+                }
 
                 (void)cli->exec("SELECT 1;");
                 std::this_thread::yield();
@@ -242,7 +246,9 @@ TEST_F(ManagerTest, PoolNeverExceedsMaxConnections) {
             }
         });
     }
-    for (auto& w : workers) w.join();
+    for (auto& w : workers) {
+        w.join();
+    }
 
     EXPECT_EQ(null_count.load(), 0);
     EXPECT_LE(peak.load(), static_cast<int>(k_max));

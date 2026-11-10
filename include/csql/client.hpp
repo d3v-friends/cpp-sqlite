@@ -11,8 +11,7 @@ namespace csql {
 
     class client {
     public:
-        explicit client(std::shared_ptr<connection> conn) : _conn{std::move(conn)} {
-        }
+        explicit client(std::shared_ptr<connection> conn) : _conn{std::move(conn)} {}
 
         ~client();
 

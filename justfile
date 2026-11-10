@@ -3,4 +3,4 @@ mod git
 
 line:
     # brew install cloc
-    cloc . --match-d='(^|/)(ctls|test)($|/)' --include-ext=cpp,hpp,c,h,cppm,ippx,inl
+    cloc ./include ./source --include-ext=cpp,hpp,c,h,cppm,ippx,inl

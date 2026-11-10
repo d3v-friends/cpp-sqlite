@@ -14,13 +14,12 @@
 
 #include <gtest/gtest.h>
 #include <ctls/ctls.hpp>
-#include <sqlite3.h>
 
-#include "types.hpp"
-#include "manager.hpp"
-#include "client.hpp"
-#include "cursor.hpp"
-#include "sqlite_row.hpp"
+#include "csql/types.hpp"
+#include "csql/manager.hpp"
+#include "csql/client.hpp"
+#include "csql/cursor.hpp"
+#include "csql/sqlite_row.hpp"
 
 namespace {
     using namespace std::chrono_literals;
@@ -43,7 +42,8 @@ namespace {
         void TearDown() override {
             _mgr.reset(); // 커넥션 먼저 닫고
             std::error_code ec;
-            std::filesystem::remove_all(_dir, ec); // 테스트용 임시 DB(-wal, -shm 포함) 정리
+            std::filesystem::remove_all(
+                _dir, ec); // 테스트용 임시 DB(-wal, -shm 포함) 정리
         }
 
         virtual std::size_t pool_size() const { return 2; }
@@ -57,10 +57,14 @@ namespace {
         // SELECT 결과 첫 줄을 가져오는 헬퍼
         static csql::sqlite_row first_row(std::unique_ptr<csql::cursor> cur) {
             EXPECT_NE(cur, nullptr);
-            if (!cur) return csql::sqlite_row{};
+            if (!cur) {
+                return csql::sqlite_row{};
+            }
             auto r = cur->next();
             EXPECT_TRUE(r) << r.get_message();
-            if (!r) return csql::sqlite_row{};
+            if (!r) {
+                return csql::sqlite_row{};
+            }
             return std::move(*r);
         }
 
@@ -306,15 +310,17 @@ namespace {
         const csql::sqlite_blob raw{1, 2, 3};
         {
             // INSERT 는 next() 를 한 번 불러야 실제로 실행됨 (SQLITE_DONE → 빈 row)
-            auto ins = c->query("INSERT INTO u VALUES (?1, ?2, ?3, ?4, ?5)",
-                                1, std::string("ciao"), 98.5, nullptr, raw);
+            auto ins = c->query(
+                "INSERT INTO u VALUES (?1, ?2, ?3, ?4, ?5)", 1, std::string("ciao"), 98.5,
+                nullptr, raw);
             ASSERT_NE(ins, nullptr);
             auto r = ins->next();
             ASSERT_TRUE(r) << r.get_message();
             EXPECT_TRUE(r->is_empty());
         }
 
-        auto row = first_row(c->query("SELECT id, name, score, memo, raw FROM u WHERE id = ?1", 1));
+        auto row = first_row(
+            c->query("SELECT id, name, score, memo, raw FROM u WHERE id = ?1", 1));
         EXPECT_EQ(*row.get<csql::sqlite_int64>(0), 1);
         EXPECT_EQ(*row.get<csql::sqlite_text>(1), "ciao");
         EXPECT_DOUBLE_EQ(*row.get<csql::sqlite_double>(2), 98.5);
@@ -335,7 +341,9 @@ namespace {
         while (true) {
             auto r = cur->next();
             ASSERT_TRUE(r) << r.get_message();
-            if (r->is_empty()) break;
+            if (r->is_empty()) {
+                break;
+            }
             got.push_back(*r->get<csql::sqlite_int64>(0));
         }
         EXPECT_EQ(got, (std::vector<std::int64_t>{2, 3}));
@@ -380,7 +388,9 @@ namespace {
         EXPECT_TRUE(c2.exec("INSERT INTO t VALUES (1);"));
 
         // c2 를 없애야 대기 중인 get_client 가 깨어남
-        { csql::client dead{std::move(c2)}; }
+        {
+            csql::client dead{std::move(c2)};
+        }
         auto got = fut.get();
         EXPECT_NE(got, nullptr);
     }
@@ -390,7 +400,8 @@ namespace {
         // client 가 먼저 죽어도 cursor 가 살아있는 동안은 반납되지 않아야 함
         auto c = _mgr->get_client();
         ASSERT_NE(c, nullptr);
-        ASSERT_TRUE(c->exec("CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (10), (20);"));
+        ASSERT_TRUE(
+            c->exec("CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (10), (20);"));
 
         auto cur = c->query("SELECT v FROM t ORDER BY v");
         ASSERT_NE(cur, nullptr);

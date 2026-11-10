@@ -16,8 +16,8 @@
 #include <gtest/gtest.h>
 #include <ctls/ctls.hpp>
 
-#include "types.hpp"
-#include "sqlite_row.hpp"
+#include "csql/types.hpp"
+#include "csql/sqlite_row.hpp"
 
 namespace {
     using csql::sqlite_blob;

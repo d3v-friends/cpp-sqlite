@@ -22,10 +22,10 @@
 #include <ctls/ctls.hpp>
 #include <sqlite3.h>
 
-#include "types.hpp"
-#include "connection.hpp"
-#include "cursor.hpp"
-#include "sqlite_row.hpp"
+#include "csql/types.hpp"
+#include "csql/connection.hpp"
+#include "csql/cursor.hpp"
+#include "csql/sqlite_row.hpp"
 
 namespace {
     using namespace std::chrono_literals;

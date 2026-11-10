@@ -1,10 +1,20 @@
 {
   "name": "cpp-sqlite",
   "version-string": "0.0.1",
+  "$package-name": "csql",
+  "$cpp-version": "20",
   "dependencies": [
     "gtest",
     "nlohmann-json",
     "sqlite3",
     "glm"
-  ]
+  ],
+  "features": {
+    "tests": {
+      "description": "gtest",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
 }

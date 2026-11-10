@@ -1,6 +1,6 @@
 #include <variant>
 
-#include "sqlite_row.hpp"
+#include "../../include/csql/sqlite_row.hpp"
 
 namespace csql {
     bool sqlite_row::is_null(const std::size_t index) const {
