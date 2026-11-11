@@ -1,10 +1,12 @@
 #pragma once
-#include <ctls/ctls.hpp>
+#include <concepts>
 #include <cstddef>
-#include <vector>
-#include <variant>
 #include <optional>
 #include <utility>
+#include <variant>
+#include <vector>
+
+#include <ctls/ctls.hpp>
 
 #include "types.hpp"
 
@@ -34,9 +36,14 @@ namespace csql {
 
         template <sqlite_value_type T> ctls::result<T> get(std::size_t index) const;
 
-        [[nodiscard]] bool is_null(std::size_t index) const;
+        [[nodiscard]] bool is_null(const std::size_t index) const {
+            return index < _values.size() &&
+                   std::holds_alternative<sqlite_null>(_values[index]);
+        }
 
-        [[nodiscard]] bool is_empty() const { return _values.empty(); }
+        [[nodiscard]] bool is_empty() const {
+            return _values.empty();
+        }
 
     private:
         std::vector<sqlite_values> _values;

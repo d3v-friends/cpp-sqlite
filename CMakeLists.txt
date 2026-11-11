@@ -36,8 +36,8 @@ get_package(PACKAGES)
 get_sources(
         LIB_SOURCES
         "${FILE_EXT}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/include/${PACKAGE_NAME}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/source/${PACKAGE_NAME}"
+        "include/${PACKAGE_NAME}"
+        "source/${PACKAGE_NAME}"
 )
 make_library(
         LIB

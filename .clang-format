@@ -1,3 +1,9 @@
+# CLion 설정에서 .clang-format 활성화 하기
+# Settings → Editor → Code Style → Enable ClangFormat 체크
+# Settings → Editor → Inspections → C/C++ → General → Clang-Tidy 에서 prefer ~~ 이 파일을 우선시 하는 체크 활성화하기
+# 적용후 Clion 모든 캐시 지우고 재시작 필요
+
+
 # .clang-format
 BasedOnStyle: LLVM
 
@@ -30,10 +36,25 @@ AlignConsecutiveDeclarations: false
 AlignTrailingComments: true
 
 # 네임스페이스
-NamespaceIndentation: All         # namespace 안 코드는 들여쓰기 안 함
+NamespaceIndentation: All
+FixNamespaceComments: true     # 닫는 } 뒤에 // namespace xxx 자동 추가 (LLVM 기본값이지만 명시)
+ShortNamespaceLines: 0         # 기본 1: 본문이 1줄 이하면 주석 생략 → 0이면 항상 붙임
 
-# include 정렬
-SortIncludes: false # 헤더자동정렬은 라이브러리마다 요구사항이 있어서 불가능하다. 직접해야한다
+# include 정렬: 자기 헤더 → 표준 → 외부 라이브러리 → 프로젝트
+SortIncludes: true
+IncludeBlocks: Regroup
+IncludeIsMainRegex: '$'      # foo.cpp ↔ foo.hpp 만 자기 헤더로 인정
+IncludeCategories:
+    # 1. 표준 라이브러리: 확장자, 폴더 없는 <vector>, <cstdint>, <unordered_map>
+    -   Regex: '^<[a-z_0-9]+>$'
+        Priority: 1
+    # 2. 외부 라이브러리: 나머지 <...> (gtest, glm, fmt, windows.h ...)
+    -   Regex: '^<'
+        Priority: 2
+    # 3. 프로젝트: "..."
+    -   Regex: '^"'
+        Priority: 3
+
 
 # 파라미터
 BinPackParameters: false  #파라미터를 여러줄 가능하게 다
@@ -45,3 +66,6 @@ InsertBraces: true # if문등 {} 기본으로 입력해주기
 
 # 기타
 Standard: c++20
+
+# 빈 함수 {} 만 한 줄 허용
+AllowShortFunctionsOnASingleLine: Empty

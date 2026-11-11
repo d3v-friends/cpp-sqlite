@@ -1,10 +1,12 @@
 #pragma once
-#include <ctls/ctls.hpp>
-#include <variant>
 #include <concepts>
 #include <cstddef>
+#include <variant>
 
-#include "types.hpp"
+#include <ctls/ctls.hpp>
+
+#include "csql/types.hpp"
+#include "sqlite_row.hpp"
 
 namespace csql {
     template <sqlite_value_type T>

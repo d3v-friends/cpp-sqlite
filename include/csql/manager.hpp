@@ -1,18 +1,19 @@
 #pragma once
-#include <mutex>
-#include <sqlite3.h>
+#include <condition_variable>
+#include <cstddef>
 #include <deque>
 #include <filesystem>
-#include <condition_variable>
-#include <vector>
 #include <memory>
-#include <cstddef>
+#include <mutex>
+#include <vector>
+
+#include <ctls/ctls.hpp>
+#include <sqlite3.h>
 
 #include "types.hpp"
 
 namespace csql {
-    class client;
-
+    class database;
     class manager {
     public:
         explicit manager() = default;
@@ -22,12 +23,12 @@ namespace csql {
         manager(manager&&) = delete;
         manager& operator=(manager&&) = delete;
 
-        bool init(
+        ctls::status initialize(
             const std::filesystem::path& filepath,
             std::size_t max_connections = 10,
             int wait_busy_milli = 5000);
 
-        std::unique_ptr<client> get_client();
+        ctls::result<std::shared_ptr<database>> get_database();
 
     private:
         mutable std::mutex _mutex;
@@ -39,8 +40,7 @@ namespace csql {
         int _wait_busy_milli = 0;
         unsigned int _wait_connection = 0; // 커넥션을 발급받으려는 프로세스 개수
 
-    private:
         void release(sqlite3* db);
-        bool init_db(sqlite3* db) const;
+        ctls::status init_db(sqlite3* db) const;
     };
-} // namespace sql
+} // namespace csql
