@@ -1,7 +1,8 @@
+include_guard(GLOBAL)
+
 include(cmake/execute.cmake)
 include(cmake/generator.cmake)
 include(cmake/json.cmake)
-include(cmake/package.cmake)
 include(cmake/path.cmake)
 include(cmake/release.cmake)
 include(cmake/sources.cmake)

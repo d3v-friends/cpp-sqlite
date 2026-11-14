@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # Windows exe 에 리소스(아이콘/버전정보) + 매니페스트 추가
 # Release 에서만 콘솔창 없이 실행 (main() 그대로 사용)
 #

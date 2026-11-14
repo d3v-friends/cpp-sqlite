@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -14,6 +15,9 @@
 
 namespace csql {
     class database;
+    class table;
+    class database_trx;
+
     class manager {
     public:
         explicit manager() = default;
@@ -23,12 +27,17 @@ namespace csql {
         manager(manager&&) = delete;
         manager& operator=(manager&&) = delete;
 
-        ctls::status initialize(
+        ctls::result<> initialize(
             const std::filesystem::path& filepath,
             std::size_t max_connections = 10,
             int wait_busy_milli = 5000);
 
         ctls::result<std::shared_ptr<database>> get_database();
+
+        // table 추상클래스라서 벨류로 못씀, unique_ptr 등으로 바꿔야 한다.
+        ctls::result<> migrate(const std::vector<table>& tables);
+
+        ctls::result<> transact(const std::function<ctls::result<>(database_trx&)>& fn);
 
     private:
         mutable std::mutex _mutex;
@@ -41,6 +50,6 @@ namespace csql {
         unsigned int _wait_connection = 0; // 커넥션을 발급받으려는 프로세스 개수
 
         void release(sqlite3* db);
-        ctls::status init_db(sqlite3* db) const;
+        ctls::result<> init_db(sqlite3* db) const;
     };
 } // namespace csql

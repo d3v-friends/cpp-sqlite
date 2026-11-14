@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # 폴더가 없으면 만든다 (중간 폴더까지 한 번에)
 #
 # mkdir(<절대경로>...)

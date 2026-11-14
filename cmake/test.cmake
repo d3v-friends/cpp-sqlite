@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # 테스트 설정
 # _TEST_NAME 테스트 이름
 # FILE_REGEX 불러올 파일들 확장자

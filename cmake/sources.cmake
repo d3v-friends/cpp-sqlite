@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # 플렛폼별로 분기 나누기
 # 파일명 regex 는 \\.(cpp|c|hpp|h)$ 처럼 파일확장자만 입력한다
 # get_sources(변수 파일확장자_REGEX 프로젝트기준상대경로 프로젝트기준상대경로...)

@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <utility>
@@ -14,11 +15,8 @@ namespace csql {
 
     class cursor {
     public:
-        explicit cursor(
-            std::shared_ptr<database> conn,
-            sqlite3_stmt_ptr stmt,
-            const bool could_lock = true)
-            : _conn{std::move(conn)}, _stmt{std::move(stmt)}, _could_lock{could_lock} {}
+        explicit cursor(std::shared_ptr<database> conn, sqlite3_stmt_ptr stmt)
+            : _conn{std::move(conn)}, _stmt{std::move(stmt)} {}
 
         ~cursor();
 
@@ -29,6 +27,8 @@ namespace csql {
         cursor(cursor&&) = delete;
 
         cursor& operator=(cursor&&) = delete;
+
+        ctls::result<sqlite_row> next(std::unique_lock<std::mutex>& lock);
 
         ctls::result<sqlite_row> next();
 
@@ -41,9 +41,8 @@ namespace csql {
         std::optional<std::string> _error;
         sqlite3_stmt_ptr _stmt;
         bool _is_end = false;
-        bool _could_lock;
 
-        ctls::result<sqlite_row> on_next();
+        static ctls::result<sqlite_row> step_stmt(sqlite3* db, sqlite3_stmt* stmt);
     };
 
 } // namespace csql

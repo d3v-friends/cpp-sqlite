@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # 타겟 머신별 특수 설정 추가하기
 function(target_settings _TARGET)
     # 컴파일러 버전 지정한 버전으로 강제하기

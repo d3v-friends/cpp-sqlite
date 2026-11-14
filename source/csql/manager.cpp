@@ -15,6 +15,7 @@
 #include <sqlite3.h>
 
 #include "csql/database.hpp"
+#include "csql/database_trx.hpp"
 #include "csql/types.hpp"
 
 namespace csql {
@@ -38,7 +39,7 @@ namespace csql {
         _status = e_manager_status::terminated;
     }
 
-    ctls::status manager::initialize(
+    ctls::result<> manager::initialize(
         const std::filesystem::path& filepath,
         const std::size_t max_connections,
         const int wait_busy_milli) {
@@ -78,9 +79,9 @@ namespace csql {
             }
 
             // db 기본값 초기화 하기
-            if (const auto res = init_db(db); !res) {
+            if (auto res = init_db(db); !res) {
                 sqlite3_close_v2(db);
-                err_message = res.get_message();
+                err_message = res.extract_failed().message;
                 break;
             }
 
@@ -98,7 +99,7 @@ namespace csql {
 
         lock.lock();
         _status = e_manager_status::ready;
-        return ctls::ok();
+        return ctls::ok;
     }
 
     ctls::result<std::shared_ptr<database>> manager::get_database() {
@@ -130,6 +131,35 @@ namespace csql {
         return std::make_shared<database>(ptr, [this](sqlite3* db) { release(db); });
     }
 
+    ctls::result<>
+    manager::transact(const std::function<ctls::result<>(database_trx&)>& fn) {
+        auto db = get_database();
+        if (!db) {
+            return db;
+        }
+
+        std::unique_lock lock{(*db)->get_mutex()};
+        database_trx trx_db{*db, lock};
+
+        if (auto res = trx_db.exec("BEGIN IMMEDIATE"); !res) {
+            return res;
+        }
+
+        if (auto res = fn(trx_db); !res) {
+            if (auto rb = trx_db.rollback(lock); !rb) {
+                return ctls::fails(res, rb);
+            }
+            return res;
+        }
+
+        return trx_db.commit(lock);
+    }
+
+    ctls::result<> manager::migrate(const std::vector<table>& tables) {
+        // todo 트랜젝션 작성 완료후 진행하기
+        return transact([](const auto& db) { return ctls::ok; });
+    }
+
     void manager::release(sqlite3* db) {
         std::unique_lock lock{_mutex};
 
@@ -152,7 +182,7 @@ namespace csql {
         _is_callable.notify_one();
     }
 
-    ctls::status manager::init_db(sqlite3* db) const {
+    ctls::result<> manager::init_db(sqlite3* db) const {
         if (sqlite3_busy_timeout(db, _wait_busy_milli) != SQLITE_OK) {
             return ctls::failed("failed to set busy timeout");
         }
@@ -169,7 +199,7 @@ namespace csql {
             sqlite3_free(err);
             return ctls::failed("failed to init db: error={}", message);
         }
-        return ctls::ok();
+        return ctls::ok;
     }
 
 } // namespace csql

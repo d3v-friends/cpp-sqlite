@@ -1,3 +1,5 @@
+include_guard(GLOBAL)
+
 # JSON 파일에서 키에 연결된 문자열 값을 가져온다
 #
 # get_json(<OUT_VAR> <KEY>... [FILE <json경로>] [DEFAULT <기본값>])

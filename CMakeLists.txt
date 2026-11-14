@@ -28,8 +28,20 @@ set(CMAKE_CXX_STANDARD ${CPP_VERSION})
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 패키지 불러오기. cmake/package.cmake 에 내용추가해주기
-get_package(PACKAGES)
+# 패키지 불러오기
+set(PACKAGES "")
+find_package(unofficial-sqlite3 CONFIG REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+        ctls
+        GIT_REPOSITORY https://github.com/d3v-friends/cpp-tools.git
+        GIT_TAG v0.0.48
+)
+FetchContent_MakeAvailable(ctls)
+list(APPEND PACKAGES
+        ctls::ctls
+        unofficial::sqlite3::sqlite3
+)
 
 
 # 라이브러리 만들기
@@ -52,11 +64,19 @@ target_precompile_headers(${PACKAGE_NAME} PRIVATE
 target_settings(${LIB})
 
 
-# file generator
+# version generate
 generate_version_file(
         NAME ${PACKAGE_NAME}
         TARGETS ${LIB} ${EXE}
 )
+
+# header generate
+generate_header(
+        OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/${PACKAGE_NAME}/${PACKAGE_NAME}.hpp"
+        DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/${PACKAGE_NAME}"
+        BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 
 # test
 # CMakeUserPresets.json 에서 관리한다

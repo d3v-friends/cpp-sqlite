@@ -21,6 +21,8 @@ namespace csql {
     using sqlite_values =
         std::variant<sqlite_null, sqlite_text, sqlite_int64, sqlite_double, sqlite_blob>;
 
+
+    // sqlite3 객체 RAII Wrapper
     struct sqlite3_deleter {
         void operator()(sqlite3* p) const noexcept {
             sqlite3_close_v2(p);
@@ -34,6 +36,7 @@ namespace csql {
         }
     };
     using sqlite3_stmt_ptr = std::unique_ptr<sqlite3_stmt, sqlite3_stmt_deleter>;
+
 
     // enum 정의
     enum class e_manager_status : std::uint8_t {
