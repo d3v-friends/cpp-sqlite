@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <vector>
 
 #include <ctls/ctls.hpp>
@@ -37,12 +38,9 @@ namespace csql {
         // table 추상클래스라서 벨류로 못씀, unique_ptr 등으로 바꿔야 한다.
         ctls::result<> migrate(const std::span<table_base* const>& tables);
 
-        ctls::result<> migrate(table_base* table);
-
         ctls::result<> transact(const std::function<ctls::result<>(database_trx&)>& fn);
 
-        // 결과값 타입을 만드시 적어주도록 하자.
-        // 람다와 리턴값 모두
+        // 결과값 타입을 만드시 적어주도록 하자. 람다와 리턴값 모두
         template <class T>
         ctls::result<T> transact(const std::function<ctls::result<T>(database_trx&)>& fn);
 
@@ -58,6 +56,8 @@ namespace csql {
 
         void release(sqlite3* db);
         ctls::result<> init_db(sqlite3* db) const;
+
+        ctls::result<> migrate(table_base* table);
     };
 
 } // namespace csql

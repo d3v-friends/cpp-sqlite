@@ -16,6 +16,8 @@
 #include "types.hpp"
 
 namespace csql {
+
+    // 쿼리는 단일쿼리만 사용가능하다
     template <typename... ARGS>
     ctls::result<cursor> database::query(
         std::unique_lock<std::mutex>& lock, const std::string& sql, ARGS&&... args) {

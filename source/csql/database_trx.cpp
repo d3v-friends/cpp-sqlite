@@ -10,7 +10,8 @@
 
 namespace csql {
 
-    ctls::result<> database_trx::rollback(std::unique_lock<std::mutex>& lock) {
+    ctls::result<>
+    database_trx::rollback([[maybe_unused]] std::unique_lock<std::mutex>& lock) {
         if (sqlite3_get_autocommit(_db->get_sqlite3()) != 0) {
             return ctls::ok;
         }

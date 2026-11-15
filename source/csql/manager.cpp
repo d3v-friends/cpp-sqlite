@@ -17,6 +17,7 @@
 #include "csql/csql_table.hpp"
 #include "csql/database.hpp"
 #include "csql/database_trx.hpp"
+#include "csql/migrator.hpp"
 #include "csql/table_base.hpp"
 #include "csql/types.hpp"
 
@@ -158,28 +159,42 @@ namespace csql {
     }
 
     ctls::result<> manager::migrate(const std::span<table_base* const>& tables) {
-        // csql_table base;
-        //
-        // if (auto res = migrate(&base); !res) {
-        //     return res;
-        // }
-        //
-        // for (const auto& table : tables) {
-        //     if (auto res = migrate(table); !res) {
-        //         return res;
-        //     }
-        // }
-        ILOG_ERROR("not implemented");
+        csql_table base;
+        if (auto res = migrate(&base); !res) {
+            return res;
+        }
+
+        for (const auto& table : tables) {
+            if (auto res = migrate(table); !res) {
+                return res;
+            }
+        }
+
         return ctls::ok;
     }
 
     ctls::result<> manager::migrate(table_base* table) {
-        ILOG_ERROR("not implemented");
-        const auto table_name = table->get_table_name();
+        return transact([&](database_trx& db) -> ctls::result<> {
+            const migrator tool{db};
+            const auto migrations = table->get_migrations();
 
+            auto start_idx = tool.get_version(table);
+            if (!start_idx) {
+                return start_idx;
+            }
 
+            for (auto idx = *start_idx;
+                 idx < static_cast<sqlite_int64>(migrations.size()); ++idx) {
+                if (auto res = db.exec(migrations[idx]); !res) {
+                    return res;
+                }
 
-        return ctls::ok;
+                if (auto res = tool.update_version(table, idx + 1); !res) {
+                    return res;
+                }
+            }
+            return ctls::ok;
+        });
     }
 
     void manager::release(sqlite3* db) {

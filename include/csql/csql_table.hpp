@@ -1,4 +1,5 @@
 #pragma once
+
 #include <format>
 #include <string>
 #include <vector>
@@ -7,10 +8,10 @@
 #include "types.hpp"
 
 namespace csql {
-    class database_trx;
+
     class csql_table : public table_base {
     public:
-        explicit csql_table(database_trx& db) : table_base{}, _db{db} {}
+        explicit csql_table() = default;
         ~csql_table() override = default;
         csql_table(const csql_table&) = delete;
         csql_table& operator=(const csql_table&) = delete;
@@ -21,14 +22,17 @@ namespace csql {
             return _table_name;
         }
 
-        std::vector<std::string> get_migrations() override;
-
-        sqlite_int64 get_version(table_base* table);
-
-        bool has_table(table_base* table) const;
+        std::vector<std::string> get_migrations() override {
+            std::vector res{std::format(
+                "CREATE TABLE IF NOT EXISTS {} ("
+                "table_name TEXT PRIMARY KEY,"
+                "version INTEGER NOT NULL DEFAULT 0 "
+                ") WITHOUT ROWID",
+                _table_name)};
+            return res;
+        }
 
     private:
-        database_trx& _db;
-        std::string _table_name = "csql";
+        std::string _table_name{CSQL_TABLE_NAME};
     };
 } // namespace csql
