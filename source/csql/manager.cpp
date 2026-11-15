@@ -14,8 +14,10 @@
 #include <ctls/ctls.hpp>
 #include <sqlite3.h>
 
+#include "csql/csql_table.hpp"
 #include "csql/database.hpp"
 #include "csql/database_trx.hpp"
+#include "csql/table_base.hpp"
 #include "csql/types.hpp"
 
 namespace csql {
@@ -155,9 +157,29 @@ namespace csql {
         return trx_db.commit(lock);
     }
 
-    ctls::result<> manager::migrate(const std::vector<table>& tables) {
-        // todo 트랜젝션 작성 완료후 진행하기
-        return transact([](const auto& db) { return ctls::ok; });
+    ctls::result<> manager::migrate(const std::span<table_base* const>& tables) {
+        // csql_table base;
+        //
+        // if (auto res = migrate(&base); !res) {
+        //     return res;
+        // }
+        //
+        // for (const auto& table : tables) {
+        //     if (auto res = migrate(table); !res) {
+        //         return res;
+        //     }
+        // }
+        ILOG_ERROR("not implemented");
+        return ctls::ok;
+    }
+
+    ctls::result<> manager::migrate(table_base* table) {
+        ILOG_ERROR("not implemented");
+        const auto table_name = table->get_table_name();
+
+
+
+        return ctls::ok;
     }
 
     void manager::release(sqlite3* db) {

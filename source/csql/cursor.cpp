@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -19,8 +20,18 @@ namespace csql {
     cursor::~cursor() = default;
 
     ctls::result<sqlite_row> cursor::next(std::unique_lock<std::mutex>& lock) {
-        if (lock.mutex() != &_conn->get_mutex()) [[unlikely]] {
-            return ctls::failed("mutex is not same");
+
+        if (_conn == nullptr) [[unlikely]] {
+            _error = "cursor is nullptr";
+            return ctls::failed(*_error);
+        }
+
+        if (_error) {
+            return ctls::failed(*_error);
+        }
+
+        if (auto res = _conn->is_same_mutex(lock); !res) [[unlikely]] {
+            return res;
         }
 
         if (!lock.owns_lock()) [[unlikely]] {
@@ -36,10 +47,16 @@ namespace csql {
         if (!res || res->is_empty()) {
             _is_end = true;
         }
+
         return res;
     }
 
     ctls::result<sqlite_row> cursor::next() {
+        if (_conn == nullptr) [[unlikely]] {
+            _error = "cursor is nullptr";
+            return ctls::failed(*_error);
+        }
+
         std::unique_lock lock{_conn->get_mutex()};
         return next(lock);
     }
@@ -51,7 +68,8 @@ namespace csql {
         case SQLITE_ROW:
             break;
         default:
-            return ctls::failed("failed step stmt: error={}", sqlite3_errmsg(db));
+            _error = std::format("failed step stmt: error={}", sqlite3_errmsg(db));
+            return ctls::failed(*_error);
         }
 
         const auto total_columns = sqlite3_column_count(stmt);
@@ -64,7 +82,8 @@ namespace csql {
             std::string key{cstr == nullptr ? "" : cstr};
 
             if (map.contains(key)) {
-                return ctls::failed("duplicate column name: {}", key);
+                _error = std::format("duplicate column name: {}", key);
+                return ctls::failed(*_error);
             }
 
             switch (sqlite3_column_type(stmt, i)) {
@@ -108,7 +127,8 @@ namespace csql {
                 break;
             default:
                 // 지정된 타입이 아니면 에러를 발생하고 더 이상 추출하지 않는다.
-                return ctls::failed("unknown column type: index={}", i);
+                _error = std::format("unknown column type: index={}, column={}", i, key);
+                return ctls::failed(*_error);
             }
         }
 

@@ -7,10 +7,10 @@
 
 #include <ctls/ctls.hpp>
 
+#include "sqlite_row.hpp"
 #include "types.hpp"
-
 namespace csql {
-    class sqlite_row;
+
     class database;
 
     class cursor {
@@ -19,13 +19,9 @@ namespace csql {
             : _conn{std::move(conn)}, _stmt{std::move(stmt)} {}
 
         ~cursor();
-
         cursor(const cursor&) = delete;
-
         cursor& operator=(const cursor&) = delete;
-
-        cursor(cursor&&) = delete;
-
+        cursor(cursor&&) = default;
         cursor& operator=(cursor&&) = delete;
 
         ctls::result<sqlite_row> next(std::unique_lock<std::mutex>& lock);
@@ -42,7 +38,7 @@ namespace csql {
         sqlite3_stmt_ptr _stmt;
         bool _is_end = false;
 
-        static ctls::result<sqlite_row> step_stmt(sqlite3* db, sqlite3_stmt* stmt);
+        ctls::result<sqlite_row> step_stmt(sqlite3* db, sqlite3_stmt* stmt);
     };
 
 } // namespace csql

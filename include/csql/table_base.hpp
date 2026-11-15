@@ -4,10 +4,10 @@
 
 namespace csql {
     // 테이블 정의 클래스
-    class table {
+    class table_base {
     public:
-        explicit table() = default;
-        virtual ~table() = default;
+        explicit table_base() = default;
+        virtual ~table_base() = default;
         virtual std::string get_table_name() = 0;
         virtual std::vector<std::string> get_migrations() = 0;
     };

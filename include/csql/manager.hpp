@@ -15,7 +15,7 @@
 
 namespace csql {
     class database;
-    class table;
+    class table_base;
     class database_trx;
 
     class manager {
@@ -35,9 +35,16 @@ namespace csql {
         ctls::result<std::shared_ptr<database>> get_database();
 
         // table 추상클래스라서 벨류로 못씀, unique_ptr 등으로 바꿔야 한다.
-        ctls::result<> migrate(const std::vector<table>& tables);
+        ctls::result<> migrate(const std::span<table_base* const>& tables);
+
+        ctls::result<> migrate(table_base* table);
 
         ctls::result<> transact(const std::function<ctls::result<>(database_trx&)>& fn);
+
+        // 결과값 타입을 만드시 적어주도록 하자.
+        // 람다와 리턴값 모두
+        template <class T>
+        ctls::result<T> transact(const std::function<ctls::result<T>(database_trx&)>& fn);
 
     private:
         mutable std::mutex _mutex;
@@ -52,4 +59,7 @@ namespace csql {
         void release(sqlite3* db);
         ctls::result<> init_db(sqlite3* db) const;
     };
+
 } // namespace csql
+
+#include "manager.inl"

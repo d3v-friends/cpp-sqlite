@@ -42,13 +42,20 @@ namespace csql {
             return _mutex;
         }
 
+        [[nodiscard]] ctls::result<>
+        is_same_mutex(const std::unique_lock<std::mutex>& lock) const {
+            if (lock.mutex() == &_mutex) {
+                return ctls::ok;
+            }
+            return ctls::failed("not same mutex");
+        }
+
         template <typename... ARGS>
-        ctls::result<std::unique_ptr<cursor>>
+        ctls::result<cursor>
         query(std::unique_lock<std::mutex>& lock, const std::string& sql, ARGS&&... args);
 
         template <typename... ARGS>
-        ctls::result<std::unique_ptr<cursor>>
-        query(const std::string& sql, ARGS&&... args);
+        ctls::result<cursor> query(const std::string& sql, ARGS&&... args);
 
         template <typename... ARGS>
         ctls::result<>

@@ -27,13 +27,12 @@ namespace csql {
         }
 
         template <typename... ARGS>
-        ctls::result<std::unique_ptr<cursor_trx>>
-        query(const std::string& sql, ARGS&&... args) {
+        ctls::result<cursor_trx> query(const std::string& sql, ARGS&&... args) {
             auto cursor = _db->query(_lock, sql, std::forward<ARGS>(args)...);
             if (!cursor) {
                 return cursor.extract_failed();
             }
-            return std::make_unique<cursor_trx>(_lock, std::move(*cursor));
+            return cursor_trx{_lock, std::move(*cursor)};
         }
 
     private:
@@ -43,5 +42,6 @@ namespace csql {
 
         ctls::result<> rollback(std::unique_lock<std::mutex>& lock);
         ctls::result<> commit(std::unique_lock<std::mutex>& lock);
+        ctls::result<> begin();
     };
 } // namespace csql

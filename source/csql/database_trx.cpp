@@ -19,8 +19,15 @@ namespace csql {
 
     ctls::result<> database_trx::commit(std::unique_lock<std::mutex>& lock) {
         if (auto commit = exec("COMMIT"); !commit) {
-            return ctls::fails(commit, rollback(lock));
+            if (auto rb = rollback(lock); !rb) {
+                return ctls::fails(commit, rb);
+            }
+            return commit;
         }
         return ctls::ok;
+    }
+
+    ctls::result<> database_trx::begin() {
+        return exec("BEGIN IMMEDIATE");
     }
 } // namespace csql

@@ -9,5 +9,5 @@
 #include "csql/manager.hpp"
 #include "csql/sqlite_row.hpp"
 #include "csql/stmt.hpp"
-#include "csql/table.hpp"
+#include "csql/table_base.hpp"
 #include "csql/types.hpp"
