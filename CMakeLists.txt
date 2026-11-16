@@ -74,7 +74,7 @@ generate_version_file(
 generate_header(
         OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/include/${PACKAGE_NAME}/${PACKAGE_NAME}.hpp"
         DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/${PACKAGE_NAME}"
-        BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include"
+        BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/csql"
 )
 
 
