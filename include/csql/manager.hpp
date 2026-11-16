@@ -1,17 +1,23 @@
 #pragma once
-#include <mutex>
-#include <sqlite3.h>
+#include <condition_variable>
+#include <cstddef>
 #include <deque>
 #include <filesystem>
-#include <condition_variable>
-#include <vector>
+#include <functional>
 #include <memory>
-#include <cstddef>
+#include <mutex>
+#include <span>
+#include <vector>
+
+#include <ctls/ctls.hpp>
+#include <sqlite3.h>
 
 #include "types.hpp"
 
 namespace csql {
-    class client;
+    class database;
+    class table_base;
+    class database_trx;
 
     class manager {
     public:
@@ -22,12 +28,21 @@ namespace csql {
         manager(manager&&) = delete;
         manager& operator=(manager&&) = delete;
 
-        bool init(
+        ctls::result<> initialize(
             const std::filesystem::path& filepath,
             std::size_t max_connections = 10,
             int wait_busy_milli = 5000);
 
-        std::unique_ptr<client> get_client();
+        ctls::result<std::shared_ptr<database>> get_database();
+
+        // table 추상클래스라서 벨류로 못씀, unique_ptr 등으로 바꿔야 한다.
+        ctls::result<> migrate(const std::span<table_base* const>& tables);
+
+        ctls::result<> transact(const std::function<ctls::result<>(database_trx&)>& fn);
+
+        // 결과값 타입을 만드시 적어주도록 하자. 람다와 리턴값 모두
+        template <class T>
+        ctls::result<T> transact(const std::function<ctls::result<T>(database_trx&)>& fn);
 
     private:
         mutable std::mutex _mutex;
@@ -39,8 +54,12 @@ namespace csql {
         int _wait_busy_milli = 0;
         unsigned int _wait_connection = 0; // 커넥션을 발급받으려는 프로세스 개수
 
-    private:
         void release(sqlite3* db);
-        bool init_db(sqlite3* db) const;
+        ctls::result<> init_db(sqlite3* db) const;
+
+        ctls::result<> migrate(table_base* table);
     };
-} // namespace sql
+
+} // namespace csql
+
+#include "manager.inl"

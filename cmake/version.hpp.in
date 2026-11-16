@@ -1,0 +1,9 @@
+#pragma once
+#include <string_view>
+
+namespace @PROGRAM_NAME@ {
+inline constexpr std::string_view version = "@PROJECT_VERSION@";
+inline constexpr int version_major = @PROJECT_VERSION_MAJOR@ + 0;
+inline constexpr int version_minor = @PROJECT_VERSION_MINOR@ + 0;
+inline constexpr int version_patch = @PROJECT_VERSION_PATCH@ + 0;
+}

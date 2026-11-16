@@ -1,14 +1,21 @@
 #pragma once
-#include <cstdint>
-#include <string>
-#include <sqlite3.h>
-#include <memory>
-#include <variant>
-#include <type_traits>
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
+#include <sqlite3.h>
+
 namespace csql {
+#ifdef __APPLE__
+    inline constexpr std::string CSQL_TABLE_NAME = "csql";
+#else
+    static std::string CSQL_TABLE_NAME = "csql";
+#endif
+
     // sqlite 맵핑 struct 는 다음 지정한 것들만 사용하자
     using sqlite_text = std::string;
     using sqlite_int64 = std::int64_t;
@@ -20,13 +27,19 @@ namespace csql {
     using sqlite_values =
         std::variant<sqlite_null, sqlite_text, sqlite_int64, sqlite_double, sqlite_blob>;
 
+    // sqlite3 객체 RAII Wrapper
     struct sqlite3_deleter {
-        void operator()(sqlite3* p) const noexcept { sqlite3_close_v2(p); }
+        void operator()(sqlite3* p) const noexcept {
+            sqlite3_close_v2(p);
+        }
     };
+
     using sqlite3_ptr = std::unique_ptr<sqlite3, sqlite3_deleter>;
 
     struct sqlite3_stmt_deleter {
-        void operator()(sqlite3_stmt* p) const noexcept { sqlite3_finalize(p); }
+        void operator()(sqlite3_stmt* p) const noexcept {
+            sqlite3_finalize(p);
+        }
     };
     using sqlite3_stmt_ptr = std::unique_ptr<sqlite3_stmt, sqlite3_stmt_deleter>;
 

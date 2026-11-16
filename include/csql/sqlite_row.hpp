@@ -1,10 +1,11 @@
 #pragma once
-#include <ctls/ctls.hpp>
-#include <cstddef>
-#include <vector>
-#include <variant>
+#include <concepts>
+#include <map>
 #include <optional>
 #include <utility>
+#include <variant>
+
+#include <ctls/ctls.hpp>
 
 #include "types.hpp"
 
@@ -13,15 +14,12 @@ namespace csql {
     // 컴파일 시기에 결정
     template <class T>
     concept sqlite_value_type = types::is_variant_member<T, sqlite_values>::value;
-
-    // 쿼리는 이미 작성되어 있으므로 개발자가 순서와 타입을 알수 있다.
     class sqlite_row {
     public:
         explicit sqlite_row() = default;
 
-        explicit sqlite_row(std::vector<sqlite_values> values)
-            : _values(std::move(values)) {
-        }
+        explicit sqlite_row(std::map<std::string, sqlite_values> data)
+            : _data(std::move(data)) {}
 
         ~sqlite_row() = default;
 
@@ -33,16 +31,14 @@ namespace csql {
 
         sqlite_row& operator=(sqlite_row&&) = default;
 
-        template <sqlite_value_type T> ctls::result<T> get(std::size_t index) const;
-
-        [[nodiscard]] bool is_null(std::size_t index) const;
+        template <sqlite_value_type T> ctls::result<T> get(const std::string& key) const;
 
         [[nodiscard]] bool is_empty() const {
-            return _values.empty();
+            return _data.empty();
         }
 
     private:
-        std::vector<sqlite_values> _values;
+        std::map<std::string, sqlite_values> _data;
     };
 
 } // namespace csql

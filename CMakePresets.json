@@ -1,6 +1,5 @@
 {
   "version": 10,
-  "$schema": "https://raw.githubusercontent.com/Kitware/CMake/master/Help/manual/presets/schema.json",
   "configurePresets": [
     {
       "name": "base",
@@ -13,19 +12,101 @@
       }
     },
     {
-      "name": "debug",
+      "name": "apple",
       "hidden": true,
       "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "VCPKG_TARGET_TRIPLET": "arm64-osx",
+        "VCPKG_HOST_TRIPLET": "arm64-osx"
       }
     },
     {
-      "name": "release",
-      "hidden": true,
-      "inherits": "base",
+      "name": "apple-debug",
+      "inherits": "apple",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_MANIFEST_FEATURES": "tests",
+        "BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "apple-release",
+      "inherits": "apple",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "win32",
+      "hidden": true,
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "VSLANG": "1033"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+      }
+    },
+    {
+      "name": "win32-debug",
+      "inherits": "win32",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_MANIFEST_FEATURES": "tests",
+        "BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "win32-release",
+      "inherits": "win32",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "apple-debug",
+      "configurePreset": "apple-debug"
+    },
+    {
+      "name": "apple-release",
+      "configurePreset": "apple-release"
+    },
+    {
+      "name": "win32-debug",
+      "configurePreset": "win32-debug"
+    },
+    {
+      "name": "win32-release",
+      "configurePreset": "win32-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "apple-debug",
+      "configurePreset": "apple-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "win32-debug",
+      "configurePreset": "win32-debug",
+      "output": {
+        "outputOnFailure": true
       }
     }
   ]
