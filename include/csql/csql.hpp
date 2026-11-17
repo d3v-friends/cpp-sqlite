@@ -9,6 +9,7 @@
 #include "manager.hpp"
 #include "migrator.hpp"
 #include "sqlite_row.hpp"
+#include "sqlite_row_binder.hpp"
 #include "stmt.hpp"
 #include "table_base.hpp"
 #include "types.hpp"
