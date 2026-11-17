@@ -1,6 +1,6 @@
 {
   "name": "cpp-sqlite",
-  "version-string": "0.0.3",
+  "version-string": "0.0.4",
   "$package-name": "csql",
   "$cpp-version": "20",
   "dependencies": [

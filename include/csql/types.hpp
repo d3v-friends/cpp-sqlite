@@ -2,12 +2,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <variant>
 #include <vector>
 
 #include <sqlite3.h>
+
+#include "types.hpp"
 
 namespace csql {
 #ifdef __APPLE__
@@ -22,6 +25,11 @@ namespace csql {
     using sqlite_double = double;
     using sqlite_blob = std::vector<std::uint8_t>;
     using sqlite_null = std::nullptr_t;
+
+    using sqlite_text_optional = std::optional<sqlite_text>;
+    using sqlite_int64_optional = std::optional<std::int64_t>;
+    using sqlite_double_optional = std::optional<double>;
+    using sqlite_blob_optional = std::optional<std::vector<std::uint8_t>>;
 
     // 여기서 variant 순서도 중요함. 순서대로 매칭을 시작하게 된다.
     using sqlite_values =
