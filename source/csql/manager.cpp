@@ -65,6 +65,17 @@ namespace csql {
         _max_connections = max_connections;
         _wait_busy_milli = wait_busy_milli;
         lock.unlock();
+        
+        // 폴더 확인하기
+        if (std::error_code error;
+            !std::filesystem::create_directories(filepath.parent_path(), error) &&
+            error) {
+            lock.lock();
+            _status = e_manager_status::terminated;
+            return ctls::failed(
+                "failed to create db dir: path={}, error={}",
+                ctls::to_utf8(filepath.parent_path()), error.message());
+        }
 
         // flag
         constexpr int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;

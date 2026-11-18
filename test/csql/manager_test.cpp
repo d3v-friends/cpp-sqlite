@@ -1,21 +1,22 @@
 // csql::manager 테스트
-// - db 파일은 실행 폴더(gtest_discover_tests 의 WORKING_DIRECTORY)에 만들고 끝나면 지운다.
+// - db 파일은 실행 폴더(gtest_discover_tests 의 WORKING_DIRECTORY)에 만들고 끝나면
+// 지운다.
 //   macOS 의 temp_directory_path() 는 TMPDIR 을 무시하는 경우가 있어서 실행 폴더를 쓴다.
 // - 결과 검증은 가능하면 manager 가 아닌 별도 raw sqlite3 커넥션으로 한다.
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <set>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include <ctls/ctls.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
-#include <ctls/ctls.hpp>
 #include <sqlite3.h>
 
 #include "csql/cursor.hpp"
@@ -75,7 +76,8 @@ namespace {
     };
 
     // csql 커넥션으로 정수 1개 읽기 (컬럼 이름은 v)
-    ctls::result<csql::sqlite_int64> query_int(csql::database& db, const std::string& sql) {
+    ctls::result<csql::sqlite_int64>
+    query_int(csql::database& db, const std::string& sql) {
         auto cur = db.query(sql);
         if (!cur) {
             return cur.extract_failed();
@@ -87,14 +89,34 @@ namespace {
         return row->get<csql::sqlite_int64>("v");
     }
 
+    // 다른 스레드에서 소멸시키고 2초 안에 끝나는지 본다. 멈추면 false
+    bool destroy_without_hang(std::unique_ptr<csql::manager>& mgr) {
+        std::atomic<bool> destroyed = false;
+        std::thread t{[&] {
+            mgr.reset();
+            destroyed = true;
+        }};
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
+        while (!destroyed && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(5ms);
+        }
+        const bool ok = destroyed;
+        t.join();
+        return ok;
+    }
+
     class ManagerTest : public ::testing::Test {
     protected:
         std::filesystem::path path;
+        // 폴더 생성 테스트용 작업 폴더. 테스트마다 따로 쓰고 끝나면 통째로 지운다
+        std::filesystem::path dir;
 
         void SetUp() override {
             const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
             path = std::filesystem::current_path() /
                    (std::string{"csql_manager_"} + info->name() + ".db");
+            dir = std::filesystem::current_path() /
+                  (std::string{"csql_manager_dir_"} + info->name());
             remove_files();
         }
 
@@ -107,6 +129,7 @@ namespace {
             for (const char* suffix : {"", "-wal", "-shm", "-journal"}) {
                 std::filesystem::remove(path.string() + suffix, ec);
             }
+            std::filesystem::remove_all(dir, ec);
         }
 
         // 초기화 + 테이블 생성
@@ -163,30 +186,150 @@ namespace {
         EXPECT_THAT(message_of(res), HasSubstr("already initialized"));
     }
 
+    // 없는 폴더는 이제 만들어 주므로, 열기 실패는 "db 경로가 폴더" 인 경우로 만든다
     TEST_F(ManagerTest, InitializeOpenFailureFails) {
-        const auto bad = std::filesystem::current_path() / "csql_no_such_dir" / "x.db";
-        std::atomic<bool> destroyed = false;
+        ASSERT_TRUE(std::filesystem::create_directories(dir));
+
+        auto mgr = std::make_unique<csql::manager>();
+        auto res = mgr->initialize(dir, 3); // 폴더를 db 파일로 열기 -> SQLITE_CANTOPEN
+        ASSERT_FALSE(res);
+        EXPECT_THAT(message_of(res), HasSubstr("failed to open database"));
+
+        auto db = mgr->get_database();
+        EXPECT_FALSE(db);
+
+        // 실패 후 소멸자가 커넥션 회수를 기다리며 멈추지 않아야 한다
+        EXPECT_TRUE(destroy_without_hang(mgr))
+            << "destructor hangs after failed initialize";
+    }
+
+    // ---------------------------------------------------------------- initialize: db
+    // 폴더 생성
+
+    // 없는 상위 폴더를 여러 단계 한 번에 만든다
+    TEST_F(ManagerTest, InitializeCreatesMissingParentDirectories) {
+        const auto db_path = dir / "a" / "b" / "c.db";
+        ASSERT_FALSE(std::filesystem::exists(dir));
+
+        csql::manager mgr;
+        auto res = mgr.initialize(db_path, 2);
+        ASSERT_TRUE(res) << message_of(res);
+
+        EXPECT_TRUE(std::filesystem::is_directory(dir / "a" / "b"));
+        EXPECT_TRUE(std::filesystem::is_regular_file(db_path));
+
+        // 만들어진 db 를 실제로 쓸 수 있어야 한다
+        auto db = mgr.get_database();
+        ASSERT_TRUE(db);
+        EXPECT_TRUE((*db)->exec("CREATE TABLE t(v INTEGER)"));
+    }
+
+    // 폴더가 이미 있으면 create_directories 가 false(에러 없음) 를 돌려준다 -> 실패로
+    // 보면 안 된다
+    TEST_F(ManagerTest, InitializeWithExistingParentDirectorySucceeds) {
+        ASSERT_TRUE(std::filesystem::create_directories(dir / "sub"));
+        const auto db_path = dir / "sub" / "x.db";
+
+        csql::manager mgr;
+        auto res = mgr.initialize(db_path, 1);
+        ASSERT_TRUE(res) << message_of(res);
+        EXPECT_TRUE(std::filesystem::is_regular_file(db_path));
+    }
+
+    // 이미 있는 db 파일을 다시 열면 데이터가 그대로 남아 있어야 한다 (폴더 생성이 기존
+    // 파일을 건드리지 않음)
+    TEST_F(ManagerTest, InitializeKeepsExistingDatabaseInCreatedDirectory) {
+        const auto db_path = dir / "keep" / "x.db";
         {
-            auto mgr = std::make_unique<csql::manager>();
-            auto res = mgr->initialize(bad, 3);
-            ASSERT_FALSE(res);
-            EXPECT_THAT(message_of(res), HasSubstr("failed to open database"));
-
-            auto db = mgr->get_database();
-            EXPECT_FALSE(db);
-
-            // 실패 후 소멸자가 커넥션 회수를 기다리며 멈추지 않아야 한다
-            std::thread t{[&] {
-                mgr.reset();
-                destroyed = true;
-            }};
-            const auto deadline = std::chrono::steady_clock::now() + 2s;
-            while (!destroyed && std::chrono::steady_clock::now() < deadline) {
-                std::this_thread::sleep_for(5ms);
-            }
-            EXPECT_TRUE(destroyed) << "destructor hangs after failed initialize";
-            t.join();
+            csql::manager mgr;
+            ASSERT_TRUE(mgr.initialize(db_path, 1));
+            auto db = mgr.get_database();
+            ASSERT_TRUE(db);
+            ASSERT_TRUE((*db)->exec("CREATE TABLE t(v INTEGER)"));
+            ASSERT_TRUE((*db)->exec("INSERT INTO t VALUES(?)", 7));
         }
+
+        csql::manager mgr;
+        auto res = mgr.initialize(db_path, 1);
+        ASSERT_TRUE(res) << message_of(res);
+
+        raw_db probe{db_path};
+        EXPECT_EQ(probe.scalar("SELECT v FROM t"), 7);
+    }
+
+    // 상위 경로 중간에 일반 파일이 있으면 폴더를 만들 수 없다
+    TEST_F(ManagerTest, InitializeDirectoryCreationFailureFails) {
+        ASSERT_TRUE(std::filesystem::create_directories(dir));
+        const auto blocker = dir / "blocker"; // 폴더가 아니라 파일
+        {
+            std::ofstream{blocker} << "x";
+        }
+        ASSERT_TRUE(std::filesystem::is_regular_file(blocker));
+
+        const auto db_path = blocker / "sub" / "x.db";
+        auto mgr = std::make_unique<csql::manager>();
+        auto res = mgr->initialize(db_path, 3);
+        ASSERT_FALSE(res);
+        const auto msg = message_of(res);
+        EXPECT_THAT(msg, HasSubstr("failed to create db dir"));
+        EXPECT_THAT(msg, HasSubstr("blocker")); // 에러에 어떤 경로였는지 들어간다
+
+        // sqlite 를 열기 전에 멈춰야 한다
+        EXPECT_FALSE(std::filesystem::exists(db_path));
+        EXPECT_TRUE(std::filesystem::is_regular_file(blocker)); // 막고 있던 파일은 그대로
+
+        // terminated 상태: 사용·재초기화 불가, 소멸자는 바로 끝나야 한다
+        auto db = mgr->get_database();
+        ASSERT_FALSE(db);
+        EXPECT_THAT(message_of(db), HasSubstr("not ready"));
+
+        auto again = mgr->initialize(path, 1);
+        ASSERT_FALSE(again);
+        EXPECT_THAT(message_of(again), HasSubstr("already initialized"));
+
+        EXPECT_TRUE(destroy_without_hang(mgr))
+            << "destructor hangs after dir creation failure";
+    }
+
+    // 폴더 없이 파일 이름만 주면 parent_path() 가 빈 경로 -> 실행 폴더에 만들어져야 한다
+    TEST_F(ManagerTest, InitializeBareFileNameSucceeds) {
+        const auto bare = path.filename(); // 실행 폴더 기준 상대경로
+        ASSERT_TRUE(bare.parent_path().empty());
+
+        csql::manager mgr;
+        auto res = mgr.initialize(bare, 1);
+        ASSERT_TRUE(res) << message_of(res);
+        EXPECT_TRUE(std::filesystem::is_regular_file(path));
+    }
+
+    // 메모리 db 도 parent_path() 가 비어 있다. 폴더 확인 때문에 막히면 안 된다
+    TEST_F(ManagerTest, InitializeMemoryDatabaseSucceeds) {
+        csql::manager mgr;
+        auto res = mgr.initialize(":memory:", 1);
+        ASSERT_TRUE(res) << message_of(res);
+
+        auto db = mgr.get_database();
+        ASSERT_TRUE(db);
+        ASSERT_TRUE((*db)->exec("CREATE TABLE t(v INTEGER)"));
+        auto v = query_int(**db, "SELECT count(*) AS v FROM t");
+        ASSERT_TRUE(v) << message_of(v);
+        EXPECT_EQ(*v, 0);
+        EXPECT_FALSE(
+            std::filesystem::exists(std::filesystem::current_path() / ":memory:"));
+    }
+
+    // max_connections / wait_busy_milli 검사가 폴더 생성보다 먼저다 -> 잘못된 인자면
+    // 폴더를 만들지 않는다
+    TEST_F(ManagerTest, InitializeInvalidArgsDoNotCreateDirectory) {
+        {
+            csql::manager mgr;
+            ASSERT_FALSE(mgr.initialize(dir / "zero" / "x.db", 0));
+        }
+        {
+            csql::manager mgr;
+            ASSERT_FALSE(mgr.initialize(dir / "neg" / "x.db", 1, -1));
+        }
+        EXPECT_FALSE(std::filesystem::exists(dir));
     }
 
     TEST_F(ManagerTest, InitializeAppliesPragmasToEveryConnection) {
@@ -339,7 +482,9 @@ namespace {
     TEST_F(ManagerTest, DestructWithoutInitializeDoesNotHang) {
         std::atomic<bool> destroyed = false;
         std::thread t{[&] {
-            { csql::manager mgr; }
+            {
+                csql::manager mgr;
+            }
             destroyed = true;
         }};
         const auto deadline = std::chrono::steady_clock::now() + 2s;
@@ -412,7 +557,6 @@ namespace {
         destroyer.join();
         EXPECT_TRUE(destroyed);
     }
-
     // ---------------------------------------------------------------- transact
 
     TEST_F(ManagerTest, TransactBeforeInitializeFails) {
@@ -631,9 +775,10 @@ namespace {
         for (int t = 0; t < threads; ++t) {
             ts.emplace_back([&, t] {
                 for (int i = 0; i < per_thread; ++i) {
-                    auto res = mgr.transact([&](csql::database_trx& trx) -> ctls::result<> {
-                        return trx.exec("INSERT INTO t VALUES(?)", t * 1000 + i);
-                    });
+                    auto res =
+                        mgr.transact([&](csql::database_trx& trx) -> ctls::result<> {
+                            return trx.exec("INSERT INTO t VALUES(?)", t * 1000 + i);
+                        });
                     if (!res) {
                         ++failures;
                     }
@@ -847,7 +992,8 @@ namespace {
         csql::manager mgr;
         init(mgr, 1);
 
-        auto ok = mgr.transact<int>([](csql::database_trx&) -> ctls::result<int> { return 1; });
+        auto ok =
+            mgr.transact<int>([](csql::database_trx&) -> ctls::result<int> { return 1; });
         ASSERT_TRUE(ok) << message_of(ok);
         auto fail = mgr.transact<int>(
             [](csql::database_trx&) -> ctls::result<int> { return ctls::failed("x"); });
