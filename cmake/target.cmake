@@ -13,7 +13,13 @@ function(target_settings _TARGET)
 
     # utf-8 기본으로 사용하기
     if (MSVC)
-        target_compile_options(${_TARGET} PRIVATE /W4 /utf-8 /permissive-)
+        target_compile_options(${_TARGET} PRIVATE
+                /W4
+                /utf-8
+                /permissive-
+                /Zc:preprocessor   # ctls IASSERT의 __VA_OPT__
+                /bigobj            # td_api.hpp + 템플릿 인스턴스 많은 파일
+        )
     else ()
         target_compile_options(${_TARGET} PRIVATE -Wall -Wextra -Wpedantic)
     endif ()
