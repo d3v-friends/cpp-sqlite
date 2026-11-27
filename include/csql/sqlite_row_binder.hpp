@@ -3,9 +3,11 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include <ctls/ctls.hpp>
 
+#include "csql/cursor.hpp"
 #include "csql/sqlite_row.hpp"
 
 namespace csql {
@@ -75,5 +77,29 @@ namespace csql {
             return res; // C++20 암시적 이동 -> result_base&& 로 실패 전달
         }
         return out;
+    }
+
+    template <row_mappable R> ctls::result<std::vector<R>> bind_all(cursor& cur) {
+        std::vector<R> res;
+
+        while (true) {
+            auto next = cur.next();
+            if (!next) {
+                return next;
+            }
+
+            if (next->is_empty()) {
+                break;
+            }
+
+            auto item = bind_row<R>(*next);
+            if (!item) {
+                return item;
+            }
+
+            res.push_back(std::move(*item));
+        }
+
+        return res;
     }
 } // namespace csql
